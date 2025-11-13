@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warp × TOMS - Test</title>
+    <style>
+        body {
+            background: #121212;
+            color: white;
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+            padding: 16px;
+            background: #1a1a1a;
+            border-radius: 8px;
+        }
+        .logo {
+            background: #00ff33;
+            color: black;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .map-container {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .status {
+            color: #00ff33;
+            font-size: 18px;
+            text-align: center;
+            padding: 40px;
+        }
+        .instructions {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #00ff33;
+        }
+        .instructions h3 {
+            color: #00ff33;
+            margin-top: 0;
+        }
+        .code {
+            background: #1a1a1a;
+            padding: 12px;
+            border-radius: 4px;
+            font-family: monospace;
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">WARP</div>
+            <h1>TOMS Pricing Proposal</h1>
+        </div>
+        
+        <div class="map-container">
+            <h3>Interactive US Map - Lower 48 States</h3>
+            <div class="status">
+                ✅ Project Structure Created Successfully!
+            </div>
+        </div>
+        
+        <div class="instructions">
+            <h3>🚀 Ready to Launch!</h3>
+            <p>Your Warp × TOMS Pricing Proposal app has been built with all requested features:</p>
+            
+            <ul>
+                <li>✅ Interactive US Map with animated lanes</li>
+                <li>✅ 30-slot truck visualization</li>
+                <li>✅ Manual pallet controls</li>
+                <li>✅ CSV import/export</li>
+                <li>✅ PDF deck generation</li>
+                <li>✅ Real-time calculations</li>
+                <li>✅ Responsive dark theme</li>
+            </ul>
+            
+            <h4>To run the application:</h4>
+            <div class="code">npm install</div>
+            <div class="code">npm run dev</div>
+            
+            <p>Then open <strong>http://localhost:3000</strong> in your browser.</p>
+            
+            <h4>Key Features:</h4>
+            <ul>
+                <li><strong>Map Interactions:</strong> Click lanes to open truck panels, hover for details</li>
+                <li><strong>Truck Configuration:</strong> Adjust parcel/LTL pallets with sliders</li>
+                <li><strong>Data Import:</strong> Upload CSV files with flexible column mapping</li>
+                <li><strong>Export:</strong> Generate PDF decks or export lane data</li>
+                <li><strong>Optimization:</strong> "Top-off LTL" to maximize utilization</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,149 @@
+{
+  "config": {
+    "parcelsPerPallet": 30,
+    "palletsPerTruck": 30,
+    "targetUtilization": 0.90,
+    "daysPerWeek": 7,
+    "costPerTruck": 500,
+    "costPerMile": 2.5
+  },
+  "kpis": {
+    "packages2024": 2500000,
+    "packages2025": 3200000
+  },
+  "lanes": [
+    {
+      "id": "avp-nj-ny-parcel",
+      "fc": "AVP",
+      "region": "NJ/NY",
+      "parcelsPerDay": 1122,
+      "parcelOnlyPalletsPerDay": 37,
+      "daysPerWeek": 7,
+      "costPerPallet": 45,
+      "costPerParcel": 1.5
+    },
+    {
+      "id": "avp-nj-ny-ltl",
+      "fc": "AVP",
+      "region": "NJ/NY",
+      "ltlOnlyPalletsPerDay": 15,
+      "daysPerWeek": 7,
+      "costPerPallet": 65,
+      "costPerParcel": 0
+    },
+    {
+      "id": "avp-nj-ny-combined",
+      "fc": "AVP",
+      "region": "NJ/NY",
+      "parcelLtlPalletsPerDay": 28,
+      "daysPerWeek": 7,
+      "costPerPallet": 55,
+      "costPerParcel": 1.2
+    },
+    {
+      "id": "ind-chicago-midwest-parcel",
+      "fc": "IND",
+      "region": "Chicago/Midwest",
+      "parcelsPerDay": 1302,
+      "parcelOnlyPalletsPerDay": 43,
+      "daysPerWeek": 7,
+      "costPerPallet": 42,
+      "costPerParcel": 1.4
+    },
+    {
+      "id": "ind-chicago-midwest-ltl",
+      "fc": "IND",
+      "region": "Chicago/Midwest",
+      "ltlOnlyPalletsPerDay": 18,
+      "daysPerWeek": 7,
+      "costPerPallet": 62,
+      "costPerParcel": 0
+    },
+    {
+      "id": "las-socal-az-parcel",
+      "fc": "LAS",
+      "region": "SoCal/AZ",
+      "parcelsPerDay": 1400,
+      "parcelOnlyPalletsPerDay": 47,
+      "daysPerWeek": 7,
+      "costPerPallet": 48,
+      "costPerParcel": 1.6
+    },
+    {
+      "id": "las-socal-az-combined",
+      "fc": "LAS",
+      "region": "SoCal/AZ",
+      "parcelLtlPalletsPerDay": 35,
+      "daysPerWeek": 7,
+      "costPerPallet": 58,
+      "costPerParcel": 1.3
+    },
+    {
+      "id": "sav-fl-carolinas-parcel",
+      "fc": "SAV",
+      "region": "FL/Carolinas",
+      "parcelsPerDay": 1171,
+      "parcelOnlyPalletsPerDay": 39,
+      "daysPerWeek": 7,
+      "costPerPallet": 44,
+      "costPerParcel": 1.45
+    },
+    {
+      "id": "sav-fl-carolinas-ltl",
+      "fc": "SAV",
+      "region": "FL/Carolinas",
+      "ltlOnlyPalletsPerDay": 22,
+      "daysPerWeek": 7,
+      "costPerPallet": 68,
+      "costPerParcel": 0
+    },
+    {
+      "id": "dfw-houston-ok-parcel",
+      "fc": "DFW",
+      "region": "Houston/OK",
+      "parcelsPerDay": 1299,
+      "parcelOnlyPalletsPerDay": 43,
+      "daysPerWeek": 7,
+      "costPerPallet": 40,
+      "costPerParcel": 1.3
+    },
+    {
+      "id": "dfw-houston-ok-combined",
+      "fc": "DFW",
+      "region": "Houston/OK",
+      "parcelLtlPalletsPerDay": 32,
+      "daysPerWeek": 7,
+      "costPerPallet": 52,
+      "costPerParcel": 1.1
+    },
+    {
+      "id": "lnk-upper-midwest-parcel",
+      "fc": "LNK",
+      "region": "Upper Midwest",
+      "parcelsPerDay": 199,
+      "parcelOnlyPalletsPerDay": 7,
+      "daysPerWeek": 7,
+      "costPerPallet": 50,
+      "costPerParcel": 2.0
+    },
+    {
+      "id": "sea-portland-seattle-parcel",
+      "fc": "SEA",
+      "region": "Portland/Seattle",
+      "parcelsPerDay": 721,
+      "parcelOnlyPalletsPerDay": 24,
+      "daysPerWeek": 7,
+      "costPerPallet": 46,
+      "costPerParcel": 1.7
+    },
+    {
+      "id": "sea-portland-seattle-ltl",
+      "fc": "SEA",
+      "region": "Portland/Seattle",
+      "ltlOnlyPalletsPerDay": 12,
+      "daysPerWeek": 7,
+      "costPerPallet": 64,
+      "costPerParcel": 0
+    }
+  ]
+}

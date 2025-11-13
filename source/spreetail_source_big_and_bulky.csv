@@ -1,0 +1,112 @@
+Big & Bulky,,,,,
+Facility Center,Destination MSA,Daily Avg. Volume,Big & Bulky,Origin Zip,Destination Zip
+"AVP (Nanticoke, PA)","Albany-Schenectady-Troy, NY",45,20,18503,12207
+"AVP (Nanticoke, PA)","Allentown-Bethlehem-Easton, PA-NJ",43,19,18503,18101
+"AVP (Nanticoke, PA)","Baltimore-Columbia-Towson, MD",139,61,18503,21201
+"AVP (Nanticoke, PA)","Binghamton, NY",12,5,18503,13901
+"AVP (Nanticoke, PA)","Boston-Cambridge-Newton, MA-NH",117,51,18503,02110
+"AVP (Nanticoke, PA)","Bridgeport-Stamford-Norwalk, CT",115,51,18503,06604
+"AVP (Nanticoke, PA)","Buffalo-Niagara Falls, NY",62,27,18503,14202
+"AVP (Nanticoke, PA)","Charleston, WV",7,3,18503,25301
+"AVP (Nanticoke, PA)","Hartford-East Hartford-Middletown, CT",73,32,18503,06103
+"AVP (Nanticoke, PA)","Huntington-Ashland, WV-KY-OH",10,4,18503,25701
+"AVP (Nanticoke, PA)","Lancaster, PA",25,11,18503,17603
+"AVP (Nanticoke, PA)","Manchester-Nashua, NH",21,9,18503,03101
+"AVP (Nanticoke, PA)","New Haven-Milford, CT",47,21,18503,06510
+"AVP (Nanticoke, PA)","New York City-Newark-Jersey City, NY-NJ-PA",240,106,18503,10001
+"AVP (Nanticoke, PA)","Norwich-New London, CT",17,7,18503,06320
+"AVP (Nanticoke, PA)","Philadelphia-Camden-Wilmington, PA-NJ-DE-MD",204,90,18503,19107
+"AVP (Nanticoke, PA)","Pittsburgh, PA",97,43,18503,15222
+"AVP (Nanticoke, PA)","Portland-South Portland, ME",85,37,18503,04101
+"AVP (Nanticoke, PA)","Poughkeepsie-Newburgh-Middletown, NY",54,24,18503,12601
+"AVP (Nanticoke, PA)","Providence-Warwick, RI-MA",80,35,18503,02903
+"AVP (Nanticoke, PA)","Reading, PA",23,10,18503,19601
+"AVP (Nanticoke, PA)","Salisbury, MD-DE",32,14,18503,21801
+"AVP (Nanticoke, PA)","Scranton–Wilkes-Barre, PA",31,14,18503,18503
+"AVP (Nanticoke, PA)","Springfield, MA",46,20,18503,01103
+"AVP (Nanticoke, PA)","Syracuse, NY",116,51,18503,13202
+"AVP (Nanticoke, PA)","Vineland-Bridgeton, NJ",7,3,18503,08360
+"AVP (Nanticoke, PA)","Washington-Arlington-Alexandria, DC-VA-MD-WV",143,63,18503,20001
+"AVP (Nanticoke, PA)","Worcester, MA-CT",66,29,18503,01608
+"DFW (Dallas, TX)","Austin-Round Rock-Georgetown, TX",121,53,75201,78701
+"DFW (Dallas, TX)","College Station-Bryan, TX",12,5,75201,77840
+"DFW (Dallas, TX)","Dallas-Fort Worth-Arlington, TX",185,81,75201,75201
+"DFW (Dallas, TX)","Houston-The Woodlands-Sugar Land, TX",260,114,75201,77002
+"DFW (Dallas, TX)","Killeen-Temple, TX",20,9,75201,76541
+"DFW (Dallas, TX)","Oklahoma City, OK",54,24,75201,73102
+"DFW (Dallas, TX)","San Antonio-New Braunfels, TX",84,37,75201,78205
+"DFW (Dallas, TX)","Shreveport-Bossier City, LA",10,4,75201,71101
+"DFW (Dallas, TX)","Tyler, TX",5,2,75201,75701
+"IND (Indianapolis, IN)","Akron, OH",31,13,46204,44308
+"IND (Indianapolis, IN)","Ann Arbor, MI",29,13,46204,48104
+"IND (Indianapolis, IN)","Canton-Massillon, OH",23,10,46204,44702
+"IND (Indianapolis, IN)","Chicago-Naperville-Elgin, IL-IN-WI",164,72,46204,60601
+"IND (Indianapolis, IN)","Cincinnati, OH-KY-IN",79,35,46204,45202
+"IND (Indianapolis, IN)","Cleveland-Elyria, OH",130,57,46204,44114
+"IND (Indianapolis, IN)","Columbus, OH",98,43,46204,43215
+"IND (Indianapolis, IN)","Dayton-Kettering, OH",35,16,46204,45402
+"IND (Indianapolis, IN)","Detroit–Warren–Dearborn, MI",209,92,46204,48226
+"IND (Indianapolis, IN)","Elkhart-Goshen, IN",7,3,46204,46516
+"IND (Indianapolis, IN)","Evansville, IN-KY",14,6,46204,47708
+"IND (Indianapolis, IN)","Flint, MI",17,8,46204,48502
+"IND (Indianapolis, IN)","Fort Wayne, IN",17,8,46204,46802
+"IND (Indianapolis, IN)","Grand Rapids-Kentwood, MI",56,25,46204,49503
+"IND (Indianapolis, IN)","Indianapolis-Carmel-Anderson, IN",89,39,46204,46204
+"IND (Indianapolis, IN)","Kalamazoo-Portage, MI",13,6,46204,49007
+"IND (Indianapolis, IN)","Kankakee, IL",5,2,46204,60901
+"IND (Indianapolis, IN)","Kansas City, MO-KS",61,27,46204,64106
+"IND (Indianapolis, IN)","Lafayette-West Lafayette, IN",12,5,46204,47901
+"IND (Indianapolis, IN)","Lansing-East Lansing, MI",20,9,46204,48933
+"IND (Indianapolis, IN)","Lexington-Fayette, KY",21,9,46204,40507
+"IND (Indianapolis, IN)","Louisville/Jefferson County, KY-IN",41,18,46204,40202
+"IND (Indianapolis, IN)","Rockford, IL",15,7,46204,61101
+"IND (Indianapolis, IN)","South Bend-Mishawaka, IN-MI",20,9,46204,46601
+"IND (Indianapolis, IN)","Toledo, OH",21,9,46204,43604
+"LAS (Las Vegas, NV)","Bakersfield, CA",17,8,89109,93301
+"LAS (Las Vegas, NV)","Las Vegas-Henderson-Paradise, NV",93,41,89109,89101
+"LAS (Las Vegas, NV)","Los Angeles-Long Beach-Anaheim, CA",452,199,89109,90012
+"LAS (Las Vegas, NV)","Oxnard-Thousand Oaks-Ventura, CA",47,21,89109,93030
+"LAS (Las Vegas, NV)","Phoenix-Mesa-Chandler, AZ",156,69,89109,85001
+"LAS (Las Vegas, NV)","Reno, NV",23,10,89109,89501
+"LAS (Las Vegas, NV)","Sacramento-Roseville-Folsom, CA",89,39,89109,95814
+"LAS (Las Vegas, NV)","San Francisco-Oakland-Berkeley, CA",89,39,89109,94103
+"LAS (Las Vegas, NV)","Tucson, AZ",31,14,89109,85701
+"LAS (Las Vegas, NV)","Vallejo, CA",20,9,89109,94590
+"LNK (Lincoln, NE)","Appleton, WI",16,7,68508,54911
+"LNK (Lincoln, NE)","Des Moines-West Des Moines, IA",22,10,68508,50309
+"LNK (Lincoln, NE)","Green Bay, WI",9,4,68508,54301
+"LNK (Lincoln, NE)","Lincoln, NE",10,4,68508,68508
+"LNK (Lincoln, NE)","Madison, WI",24,10,68508,53703
+"LNK (Lincoln, NE)","Milwaukee-Waukesha, WI",66,29,68508,53202
+"LNK (Lincoln, NE)","Omaha-Council Bluffs, NE-IA",28,12,68508,68102
+"LNK (Lincoln, NE)","Oshkosh-Neenah, WI",8,3,68508,54901
+"LNK (Lincoln, NE)","Racine, WI",10,4,68508,53403
+"LNK (Lincoln, NE)","Topeka, KS",11,5,68508,66603
+"SAV (Savannah, GA)","Atlanta-Sandy Springs-Alpharetta, GA",164,72,31401,30303
+"SAV (Savannah, GA)","Augusta-Richmond County, GA-SC",24,10,31401,30901
+"SAV (Savannah, GA)","Birmingham-Hoover, AL",31,14,31401,35203
+"SAV (Savannah, GA)","Charleston-North Charleston, SC",43,19,31401,29401
+"SAV (Savannah, GA)","Charlotte, NC",114,50,31401,28202
+"SAV (Savannah, GA)","Charlottesville, VA",16,7,31401,22902
+"SAV (Savannah, GA)","Chattanooga, TN-GA",21,9,31401,37402
+"SAV (Savannah, GA)","Columbus, GA-AL",12,5,31401,31901
+"SAV (Savannah, GA)","Gainesville, GA",10,4,31401,30501
+"SAV (Savannah, GA)","Huntsville, AL",18,8,31401,35801
+"SAV (Savannah, GA)","Jacksonville, FL",66,29,31401,32202
+"SAV (Savannah, GA)","Knoxville, TN",35,16,31401,37902
+"SAV (Savannah, GA)","Macon-Bibb County, GA",11,5,31401,31201
+"SAV (Savannah, GA)","Miami-Fort Lauderdale-West Palm Beach, FL",168,74,31401,33131
+"SAV (Savannah, GA)","Montgomery, AL",10,4,31401,36104
+"SAV (Savannah, GA)","Nasvhille, TN",25,11,31401,37203
+"SAV (Savannah, GA)","North Port-Sarasota-Bradenton, FL",52,23,31401,34236
+"SAV (Savannah, GA)","Orlando-Kissimmee-Sanford, FL",97,43,31401,32801
+"SAV (Savannah, GA)","Port St. Lucie, FL",24,10,31401,34952
+"SAV (Savannah, GA)","Richmond, VA",54,24,31401,23219
+"SAV (Savannah, GA)","Savannah, GA",26,12,31401,31401
+"SAV (Savannah, GA)","Tampa-St. Petersburg-Clearwater, FL",81,36,31401,33602
+"SAV (Savannah, GA)","Virginia Beach-Norfolk-Newport News, VA-NC",52,23,31401,23510
+"SEA (Tacoma, WA)","Bremerton-Silverdale-Port Orchard, WA",16,7,98101,98312
+"SEA (Tacoma, WA)","Olympia-Lacey-Tumwater, WA",19,8,98101,98501
+"SEA (Tacoma, WA)","Portland-Vancouver-Hillsboro, OR-WA",66,29,98101,97204
+"SEA (Tacoma, WA)","Salem, OR",26,11,98101,97301
+"SEA (Tacoma, WA)","Seattle-Tacoma-Bellevue, WA",209,92,98101,98101
