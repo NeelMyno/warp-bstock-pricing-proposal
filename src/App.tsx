@@ -51,7 +51,7 @@ function App() {
         console.log('CSV data loaded successfully, lanes:', csvLanes.length);
         console.log('All loaded lanes:', csvLanes.map(l => `${l.origin} → ${l.destination} (${l.category})`));
 
-        // Use all lanes from the TOMS CSV (single category: 'new')
+        // Use all lanes from the Bstock CSV (single category: 'new')
         setAppState(prev => ({
           ...prev,
           lanes: csvLanes
@@ -225,7 +225,7 @@ function App() {
       <div className="min-h-screen bg-warp-dark text-white flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-400 mx-auto mb-4"></div>
-          <p className="text-lg">Loading TOMS data...</p>
+          <p className="text-lg">Loading Bstock data...</p>
         </div>
       </div>
     );
@@ -255,7 +255,7 @@ function App() {
       case 'parcel': return 'Parcel Only';
       case 'ltl': return 'LTL Only';
       case 'parcel-ltl': return 'Parcel + LTL';
-      case 'new': return 'TOMS';
+      case 'new': return 'Bstock';
       default: return category;
     }
   };
@@ -269,7 +269,7 @@ function App() {
         <div className="flex items-center justify-between">
           {/* App Title */}
           <div className="flex items-center gap-3">
-            <img src="/toms/media/logo.svg" alt="TOMS logo" className="h-6 opacity-90" />
+            <img src="/toms/media/logo.svg" alt="Bstock logo" className="h-6 opacity-90" />
             <span className="text-xs text-text-2">Pricing Proposal</span>
           </div>
           {/* Cadence selector */}
@@ -377,7 +377,7 @@ function App() {
         </div>
       </div>
 
-      {/* Lane Details Tooltip (TOMS) */}
+      {/* Lane Details Tooltip (Bstock) */}
       {hoveredLane && (
         <div
           ref={tooltipRef}

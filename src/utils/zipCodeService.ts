@@ -20,10 +20,10 @@ export const ZIP_CODE_COORDINATES: Record<string, ZipCodeCoordinates> = {
   '98101': { zipCode: '98101', latitude: 47.6062, longitude: -122.3321, city: 'Seattle', state: 'WA' }, // SEA (WA) - corrected
   '89109': { zipCode: '89109', latitude: 36.1215, longitude: -115.1739, city: 'Las Vegas', state: 'NV' }, // LAS (NV) - corrected
 
-  // TOMS canonical origin (DFW)
+  // Bstock canonical origin (DFW)
   '75238': { zipCode: '75238', latitude: 32.8824, longitude: -96.7075, city: 'Dallas', state: 'TX' },
 
-  // TOMS crossdocks
+  // Bstock crossdocks
   '90021': { zipCode: '90021', latitude: 34.0346, longitude: -118.2410, city: 'Los Angeles', state: 'CA' }, // LAX
   '95131': { zipCode: '95131', latitude: 37.3890, longitude: -121.8850, city: 'San Jose', state: 'CA' }, // SFO (SJ area)
   '07036': { zipCode: '07036', latitude: 40.6220, longitude: -74.2510, city: 'Linden', state: 'NJ' }, // EWR region

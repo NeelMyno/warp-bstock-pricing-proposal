@@ -1,6 +1,6 @@
-# Warp × TOMS Pricing Proposal
+# Warp × Bstock Pricing Proposal
 
-An interactive web application for visualizing carrier injections from TOMS origin FCs into nearby dense markets, combining parcel + LTL on the same truck.
+An interactive web application for visualizing carrier injections from Bstock origin FCs into nearby dense markets, combining parcel + LTL on the same truck.
 
 ## Features
 
@@ -60,7 +60,7 @@ An interactive web application for visualizing carrier injections from TOMS orig
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd warp-toms-pricing-proposal
+cd warp-bstock-pricing-proposal
 ```
 
 2. Install dependencies:
@@ -166,4 +166,4 @@ LAS,SoCal,1400,12
 
 ## License
 
-This project is proprietary to Warp and TOMS.
+This project is proprietary to Warp and Bstock.

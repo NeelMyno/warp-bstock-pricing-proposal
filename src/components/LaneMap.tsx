@@ -233,7 +233,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
 
 
 
-  /* Create truck utilization HTML for tooltip (removed for TOMS simplification)
+  /* Create truck utilization HTML for tooltip (removed for Bstock simplification)
   const createTruckUtilizationHTML = useCallback((lane: Lane, allLanes?: Lane[]) => {
     // Determine pallets and trucks based on category
     let palletsPerDay = 0;
@@ -361,7 +361,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       </div>
     `;
   */
-  // Process lanes data for visualization (TOMS two-hop: Origin → Crossdock → Destination)
+  // Process lanes data for visualization (Bstock two-hop: Origin → Crossdock → Destination)
   const { arcData, pathData, pointData } = useMemo(() => {
     const arcs: any[] = [];
     const paths: any[] = [];

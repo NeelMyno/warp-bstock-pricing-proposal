@@ -1,4 +1,4 @@
-// Core data types for the Warp × TOMS Pricing Proposal app
+// Core data types for the Warp × Bstock Pricing Proposal app
 
 export type FCCode = 'AVP (PA)' | 'IND (IN)' | 'LAS (NV)' | 'SAV (GA)' | 'DFW' | 'LNK (NE)' | 'SEA (WA)';
 
@@ -18,7 +18,7 @@ export interface Region {
   centroid: [number, number]; // [longitude, latitude]
 }
 
-// Shipping cadence for TOMS flows
+// Shipping cadence for Bstock flows
 export type ShippingCadence = '7d' | '6d' | '5d' | '4d';
 
 // Updated Lane interface based on new simplified CSV structure
@@ -53,7 +53,7 @@ export interface Lane {
   arrivalTime?: string; // Arrival Time
   totalMiles?: number; // Total Miles
 
-  // TOMS-specific fields
+  // Bstock-specific fields
   tomsOriginZip?: string; // Canonical origin zip used for all rows
   crossdockName?: string;
   crossdockZip?: string;

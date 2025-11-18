@@ -74,11 +74,11 @@ const parseCSVLine = (line: string): string[] => {
 
 
 
-// Load TOMS single CSV and map to lanes (new category)
+// Load Bstock single CSV and map to lanes (new category)
 export const loadCSVData = async (): Promise<Lane[]> => {
   try {
     const res = await fetch('/toms/csv/toms.csv');
-    if (!res.ok) throw new Error(`Failed to load TOMS CSV: ${res.status}`);
+    if (!res.ok) throw new Error(`Failed to load Bstock CSV: ${res.status}`);
     const text = await res.text();
 
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
@@ -190,7 +190,7 @@ export const loadCSVData = async (): Promise<Lane[]> => {
         // Zip fields used by map
         originZip: originZip,
         destinationZip: destZip,
-        // TOMS specific
+        // Bstock specific
         tomsOriginZip: originZip,
         crossdockName,
         crossdockZip,
@@ -209,7 +209,7 @@ export const loadCSVData = async (): Promise<Lane[]> => {
 
     return lanes;
   } catch (error) {
-    console.error('Error loading TOMS CSV data:', error);
+    console.error('Error loading Bstock CSV data:', error);
     throw error;
   }
 };

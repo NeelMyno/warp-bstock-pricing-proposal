@@ -46,7 +46,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     <div className="w-64 bg-surface-1 border-r border-brd-1 flex flex-col h-screen">
       {/* Header */}
       <div className="p-6 border-b border-brd-1">
-        <h1 className="text-xl font-bold text-accent mb-1">Warp × TOMS</h1>
+        <h1 className="text-xl font-bold text-accent mb-1">Warp × Bstock</h1>
         <p className="text-sm text-text-2">Pricing Proposal Dashboard</p>
       </div>
 
