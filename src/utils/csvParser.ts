@@ -74,28 +74,36 @@ const parseCSVLine = (line: string): string[] => {
 
 export interface StateAggregate {
   state: string;
+  totalShipments: number;
   totalPieces: number;
   lanes: Lane[];
 }
 
 export const aggregateByDestinationState = (lanes: Lane[]): StateAggregate[] => {
-  const byState = new Map<string, { totalPieces: number; lanes: Lane[] }>();
+  const byState = new Map<string, { totalShipments: number; totalPieces: number; lanes: Lane[] }>();
 
   lanes.forEach((lane) => {
     if (!lane.destState || typeof lane.totalPieces !== 'number') return;
     const key = lane.destState;
-    const entry = byState.get(key) ?? { totalPieces: 0, lanes: [] };
+    const entry =
+      byState.get(key) ?? { totalShipments: 0, totalPieces: 0, lanes: [] };
+    entry.totalShipments += 1;
     entry.totalPieces += lane.totalPieces || 0;
     entry.lanes.push(lane);
     byState.set(key, entry);
   });
 
   return Array.from(byState.entries())
-    .map(([state, { totalPieces, lanes }]) => ({ state, totalPieces, lanes }))
+    .map(([state, { totalShipments, totalPieces, lanes }]) => ({
+      state,
+      totalShipments,
+      totalPieces,
+      lanes,
+    }))
     .sort((a, b) => {
       // Sort primarily by total shipments (descending), then by state code (ascending)
-      if (b.totalPieces !== a.totalPieces) {
-        return b.totalPieces - a.totalPieces;
+      if (b.totalShipments !== a.totalShipments) {
+        return b.totalShipments - a.totalShipments;
       }
       return a.state.localeCompare(b.state);
     });

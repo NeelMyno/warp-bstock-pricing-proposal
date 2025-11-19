@@ -55,6 +55,24 @@ function App() {
   const [isResizing, setIsResizing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Track when we are on a medium-and-up viewport so we can:
+  // - Use the resizable split layout (table left, map right)
+  // - Fall back to a stacked layout with full-width panels on small screens
+  const [isMdUp, setIsMdUp] = useState(() => {
+    if (typeof window === 'undefined' || !('matchMedia' in window)) return true;
+    return window.matchMedia('(min-width: 768px)').matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('matchMedia' in window)) return;
+    const mq = window.matchMedia('(min-width: 768px)');
+    const handleChange = (event: MediaQueryListEvent) => {
+      setIsMdUp(event.matches);
+    };
+    mq.addEventListener('change', handleChange);
+    return () => mq.removeEventListener('change', handleChange);
+  }, []);
+
   // Load CSV data on component mount
   useEffect(() => {
     const loadData = async () => {
@@ -275,7 +293,7 @@ function App() {
 
     const allowedStates = new Set(
       stateAggregatesForFilters
-        .filter((agg) => agg.totalPieces >= minPiecesFilter)
+        .filter((agg) => agg.totalShipments >= minPiecesFilter)
         .map((agg) => agg.state)
     );
 
@@ -294,23 +312,27 @@ function App() {
       return null;
     }
 
+    const totalShipments = stateAggregatesForFilters.reduce(
+      (sum, agg) =>
+        sum + (typeof agg.totalShipments === 'number' ? agg.totalShipments : agg.lanes.length),
+      0
+    );
     const totalPieces = stateAggregatesForFilters.reduce(
       (sum, agg) => sum + (typeof agg.totalPieces === 'number' ? agg.totalPieces : 0),
       0
     );
     const stateCount = stateAggregatesForFilters.length;
 
-    let warpPieces = 0;
-    let ltlPieces = 0;
+    let warpShipments = 0;
+    let ltlShipments = 0;
     carrierFilteredLanes.forEach((lane) => {
-      if (typeof lane.totalPieces !== 'number') return;
       const type = (lane.carrierType ?? '').toLowerCase();
-      if (type === 'warp') warpPieces += lane.totalPieces;
-      else if (type === 'ltl') ltlPieces += lane.totalPieces;
+      if (type === 'warp') warpShipments += 1;
+      else if (type === 'ltl') ltlShipments += 1;
     });
 
-    const warpShare = totalPieces > 0 ? warpPieces / totalPieces : 0;
-    const ltlShare = totalPieces > 0 ? ltlPieces / totalPieces : 0;
+    const warpShare = totalShipments > 0 ? warpShipments / totalShipments : 0;
+    const ltlShare = totalShipments > 0 ? ltlShipments / totalShipments : 0;
 
     const maxPiecesPerState = stateAggregatesForFilters.reduce(
       (max, agg) => (agg.totalPieces > max ? agg.totalPieces : max),
@@ -318,6 +340,7 @@ function App() {
     );
 
     return {
+      totalShipments,
       totalPieces,
       stateCount,
       warpShare,
@@ -330,6 +353,10 @@ function App() {
   const mapLanes = filteredLanes.filter(
     (lane) => !hiddenGroups.has(lane.crossdockName ?? 'Crossdock')
   );
+
+  // Derived responsive layout widths for table (left) and map (right) panels
+  const leftPaneStyle = isMdUp ? { width: `${leftWidth}%` } : { width: '100%' };
+  const rightPaneStyle = isMdUp ? { width: `${100 - leftWidth}%` } : { width: '100%' };
 
   if (loading) {
     return (
@@ -389,11 +416,11 @@ function App() {
 
 
       {/* Main Content Area - Resizable Split Layout */}
-      <div ref={containerRef} className="flex-1 flex relative min-h-0">
+      <div ref={containerRef} className="flex-1 flex flex-col md:flex-row relative min-h-0">
         {/* Left Section - Table (resizable width) */}
         <div
-          className="flex flex-col border-r border-brd-1 min-h-0"
-          style={{ width: `${leftWidth}%` }}
+          className="flex flex-col border-b md:border-b-0 md:border-r border-brd-1 min-h-0"
+          style={leftPaneStyle}
         >
           {/* Header Bar with controls */}
           <div className="bg-surface-2 border-b border-brd-1 px-4 py-2">
@@ -408,8 +435,6 @@ function App() {
                     <>
                       {' | '}
                       {bstockMetrics.stateCount} states
-                      {' | '}
-                      {bstockMetrics.totalPieces.toLocaleString('en-US')} pieces
                     </>
                   )}
                 </p>
@@ -500,14 +525,14 @@ function App() {
 
         {/* Resizable Divider */}
         <div
-          className={`resize-handle cursor-col-resize ${isResizing ? 'resizing' : ''}`}
+          className={`hidden md:block resize-handle cursor-col-resize ${isResizing ? 'resizing' : ''}`}
           onMouseDown={handleMouseDown}
         />
 
         {/* Right Section - Map (remaining width) */}
         <div
-          className="flex flex-col h-full"
-          style={{ width: `${100 - leftWidth}%` }}
+          className="flex flex-col"
+          style={rightPaneStyle}
         >
           {/* Map Header Bar */}
           <div className="bg-surface-2 border-b border-brd-1 px-4 py-2">
@@ -538,7 +563,7 @@ function App() {
           </div>
 
           {/* Map Container - Fixed height */}
-          <div className="flex-1 relative">
+          <div className="relative h-[320px] sm:h-[380px] md:flex-1">
             <LaneMap
               lanes={mapLanes}
               selectedLane={appState.selectedLane}

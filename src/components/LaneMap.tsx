@@ -3,7 +3,6 @@ import DeckGL from '@deck.gl/react';
 import { ArcLayer, ScatterplotLayer, PathLayer, IconLayer } from '@deck.gl/layers';
 import { FlyToInterpolator } from '@deck.gl/core';
 import { Map as ReactMap, Marker } from 'react-map-gl/maplibre';
-import { PathStyleExtension } from '@deck.gl/extensions';
 import { RotateCcw } from 'lucide-react';
 import type { Layer } from '@deck.gl/core';
 import { Lane, LaneCategory } from '../types';
@@ -63,6 +62,9 @@ const ACCENT: [number, number, number] = [0, 255, 51];
 
 const WARP_RGB: [number, number, number] = [34, 197, 94]; // green
 const LTL_RGB: [number, number, number] = [59, 130, 246]; // blue
+
+// Special highlight color for the short Monroe, NJ (08831)  Clark, NJ (07036) lane.
+const MONROE_TO_CLARK_RGB: [number, number, number] = [252, 211, 77]; // yellow
 
 const getCarrierColor = (carrierType?: string): [number, number, number] => {
   const normalized = carrierType?.trim().toLowerCase();
@@ -301,6 +303,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
     return map;
   }, [stateAggregates]);
 
+
   const hoveredState = useMemo(() => {
     if (hoveredLane?.destState) return hoveredLane.destState;
 
@@ -465,6 +468,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
     const seenCross = new Set<string>();
     const seenDest = new Set<string>();
 
+
     lanes.forEach((lane) => {
       const originZip = lane.originZip || lane.tomsOriginZip || '08831';
       const crossZip: string = lane.crossdockZip ?? '';
@@ -510,16 +514,39 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       const hovered = Boolean(isStateHighlighted || isDirectHover);
       const baseColor = getCarrierColor(lane.carrierType);
 
-      // Leg 1: origin  crossdock (per-lane, colored by carrier)
+      const isMonroeToClark = originZip === '08831' && crossZip === '07036';
+      const arcColor = isMonroeToClark ? MONROE_TO_CLARK_RGB : baseColor;
+
+      // Leg 1: origin → crossdock (per-lane, colored by carrier)
+      // Very short hops (like 08831 → 07036) looked like a vertical "spike"
+      // once we added curvature. For most of those, we flatten the arc
+      // (height = 0) so it hugs the map. For the key 08831 → 07036 lane,
+      // keep a subtle bow with a fixed, modest height.
+      const dx = crossC.longitude - originC.longitude;
+      const dy = crossC.latitude - originC.latitude;
+      const distanceMeters = Math.sqrt(dx * dx + dy * dy) * 111000; // rough great-circle
+
+      let height = 0;
+      if (isMonroeToClark) {
+        // Keep a very gentle bow for 08831  07036 so it never "shoots into space".
+        height = .8;
+      } else if (distanceMeters > 100_000) {
+        const rawHeight = distanceMeters * 0.05;
+        height = Math.min(20000, Math.max(5000, rawHeight));
+      } else {
+        height = 0;
+      }
+
       arcs.push({
         sourcePosition: [originC.longitude, originC.latitude],
         targetPosition: [crossC.longitude, crossC.latitude],
         lane,
-        color: baseColor,
+        color: arcColor,
         width: 2,
         selected: isSelected,
         hovered,
-        leg: 'o-c'
+        leg: 'o-c',
+        height,
       });
 
 
@@ -586,7 +613,9 @@ export const LaneMap: React.FC<LaneMapProps> = ({
     mapHoveredCrossdockZip ||
     highlightState
   );
-  const dimRGB = (c: [number, number, number], f = 0.35): [number, number, number] => [
+
+  // Helper to dim carrier colors toward the background while preserving hue
+  const dimRGB = (c: [number, number, number], f = 0.25): [number, number, number] => [
     Math.round(c[0] * f), Math.round(c[1] * f), Math.round(c[2] * f)
   ];
 
@@ -617,24 +646,29 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       getSourceColor: (d: any) => {
         const base = d.color as [number, number, number];
         const alphaStrong = 230;
-        const alphaMedium = 160;
-        const alphaDim = 3; // ~1% opacity
+        const alphaMedium = 150;
+        const alphaDim = 3; // ~1% opacity when another lane/state is highlighted
 
         if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
         if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
-        return [base[0], base[1], base[2], alphaMedium];
+
+        const bg = dimRGB(base, 0.6);
+        return [bg[0], bg[1], bg[2], alphaMedium];
       },
       getTargetColor: (d: any) => {
         const base = d.color as [number, number, number];
         const alphaStrong = 230;
-        const alphaMedium = 160;
-        const alphaDim = 3; // ~1% opacity
+        const alphaMedium = 150;
+        const alphaDim = 3; // ~1% opacity when another lane/state is highlighted
 
         if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
         if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
-        return [base[0], base[1], base[2], alphaMedium];
+
+        const bg = dimRGB(base, 0.6);
+        return [bg[0], bg[1], bg[2], alphaMedium];
       },
       getWidth: (d: any) => (d.selected ? (d.width ?? 2) * 2 : (d.width ?? 2)),
+      getHeight: (d: any) => d.height ?? 15000,
       widthUnits: 'pixels',
       pickable: false,
       transitions: {
@@ -657,24 +691,29 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       getSourceColor: (d: any) => {
         const base = d.color as [number, number, number];
         const alphaStrong = 230;
-        const alphaMedium = 160;
-        const alphaDim = 3; // ~1% opacity
+        const alphaMedium = 150;
+        const alphaDim = 3; // ~1% opacity when another lane/state is highlighted
 
         if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
         if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
-        return [base[0], base[1], base[2], alphaMedium];
+
+        const bg = dimRGB(base, 0.6);
+        return [bg[0], bg[1], bg[2], alphaMedium];
       },
       getTargetColor: (d: any) => {
         const base = d.color as [number, number, number];
         const alphaStrong = 230;
-        const alphaMedium = 160;
-        const alphaDim = 3; // ~1% opacity
+        const alphaMedium = 150;
+        const alphaDim = 3; // ~1% opacity when another lane/state is highlighted
 
         if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
         if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
-        return [base[0], base[1], base[2], alphaMedium];
+
+        const bg = dimRGB(base, 0.6);
+        return [bg[0], bg[1], bg[2], alphaMedium];
       },
       getWidth: (d: any) => (d.selected ? (d.width ?? 2) * 2 : (d.width ?? 2)),
+      getHeight: (d: any) => d.height ?? 15000,
       widthUnits: 'pixels',
       pickable: false,
       transitions: {
@@ -698,12 +737,14 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       getColor: (d: any) => {
         const base = d.color as [number, number, number];
         const alphaStrong = 230;
-        const alphaMedium = 160;
-        const alphaDim = 3; // ~1% opacity
+        const alphaMedium = 150;
+        const alphaDim = 3; // ~1% opacity when another lane/state is highlighted
 
         if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
         if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
-        return [base[0], base[1], base[2], alphaMedium];
+
+        const bg = dimRGB(base, 0.6);
+        return [bg[0], bg[1], bg[2], alphaMedium];
       },
       getWidth: (d: any) => {
         const base = d.width ?? 2;
@@ -721,8 +762,6 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       onClick: (info: any) => {
         if (info.object?.lane) onLaneSelect(info.object.lane);
       },
-      extensions: [new PathStyleExtension({ dash: true })],
-      getDashArray: () => [2, 4], // dotted
       transitions: {
         getColor: transitionMs,
         getWidth: transitionMs
@@ -740,12 +779,14 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       getColor: (d: any) => {
         const base = d.color as [number, number, number];
         const alphaStrong = 230;
-        const alphaMedium = 160;
-        const alphaDim = 3; // ~1% opacity
+        const alphaMedium = 150;
+        const alphaDim = 3; // ~1% opacity when another lane/state is highlighted
 
         if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
         if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
-        return [base[0], base[1], base[2], alphaMedium];
+
+        const bg = dimRGB(base, 0.6);
+        return [bg[0], bg[1], bg[2], alphaMedium];
       },
       getWidth: (d: any) => {
         const base = d.width ?? 2;
@@ -763,8 +804,6 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       onClick: (info: any) => {
         if (info.object?.lane) onLaneSelect(info.object.lane);
       },
-      extensions: [new PathStyleExtension({ dash: true })],
-      getDashArray: () => [2, 4], // dotted
       transitions: {
         getColor: transitionMs,
         getWidth: transitionMs
@@ -906,15 +945,17 @@ export const LaneMap: React.FC<LaneMapProps> = ({
             if (!stateKey) return null;
 
             const aggregate = stateAggregateMap.get(stateKey);
-            const totalPieces = aggregate?.totalPieces ?? lane.totalPieces ?? 0;
-
+            const totalShipments =
+              typeof aggregate?.totalShipments === 'number'
+                ? aggregate.totalShipments
+                : aggregate?.lanes.length ?? 1;
 
             const originCity = lane.originCity ?? 'Monroe Township';
             const originState = lane.originState ?? 'NJ';
             const originZip = lane.originZip ?? '08831';
             const destinationState = stateKey;
-            const formattedPieces = Number.isFinite(totalPieces)
-              ? totalPieces.toLocaleString('en-US')
+            const formattedShipments = Number.isFinite(totalShipments)
+              ? totalShipments.toLocaleString('en-US')
               : '-';
 
             const title = `${originCity}, ${originState} ${originZip} → ${destinationState}`;
@@ -930,7 +971,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
                   <div class="space-y-2 text-xs">
                     <div class="flex items-baseline justify-between gap-3">
                       <span class="text-text-2">Total shipments into ${destinationState}</span>
-                      <span class="font-semibold text-text-1 tabular-nums">${formattedPieces}</span>
+                      <span class="font-semibold text-text-1 tabular-nums">${formattedShipments}</span>
                     </div>
                   </div>
                 </div>

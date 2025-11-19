@@ -118,24 +118,23 @@ export default function LaneTable({
                 if (!representativeLane) return null;
 
                 // Per-state carrier mix and destination ZIP counts
-                let warpPieces = 0;
-                let ltlPieces = 0;
+                let warpShipments = 0;
+                let ltlShipments = 0;
                 const destZips = new Set<string>();
 
                 agg.lanes.forEach((lane) => {
-                  if (typeof lane.totalPieces === 'number') {
-                    const type = (lane.carrierType ?? '').toLowerCase();
-                    if (type === 'warp') warpPieces += lane.totalPieces;
-                    else if (type === 'ltl') ltlPieces += lane.totalPieces;
-                  }
+                  const type = (lane.carrierType ?? '').toLowerCase();
+                  if (type === 'warp') warpShipments += 1;
+                  else if (type === 'ltl') ltlShipments += 1;
+
                   if (lane.destZip) {
                     destZips.add(String(lane.destZip));
                   }
                 });
 
-                const totalPieces = typeof agg.totalPieces === 'number' ? agg.totalPieces : 0;
-                const warpShare = totalPieces > 0 ? (warpPieces / totalPieces) * 100 : 0;
-                const ltlShare = totalPieces > 0 ? (ltlPieces / totalPieces) * 100 : 0;
+                const totalShipments = typeof agg.totalShipments === 'number' ? agg.totalShipments : agg.lanes.length;
+                const warpShare = totalShipments > 0 ? (warpShipments / totalShipments) * 100 : 0;
+                const ltlShare = totalShipments > 0 ? (ltlShipments / totalShipments) * 100 : 0;
                 const zipCount = destZips.size;
 
                 const isSelected = selectedLane?.id === representativeLane.id;
@@ -171,7 +170,7 @@ export default function LaneTable({
                     <td className="py-1 px-4">
                       <div className="text-right py-0">
                         <span className="text-text-1 text-sm tabular-nums">
-                          {formatNumber(agg.totalPieces, 0)}
+                          {formatNumber(agg.totalShipments, 0)}
                         </span>
                       </div>
                     </td>

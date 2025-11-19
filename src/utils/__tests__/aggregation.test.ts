@@ -18,7 +18,7 @@ const makeLane = (overrides: Partial<Lane>): Lane => ({
 });
 
 describe('aggregateByDestinationState', () => {
-  it('groups lanes by destination state and sums totalPieces', () => {
+  it('groups lanes by destination state and computes shipments and pieces', () => {
     const lanes: Lane[] = [
       makeLane({ id: 'a', destState: 'PA', totalPieces: 100 }),
       makeLane({ id: 'b', destState: 'PA', totalPieces: 50 }),
@@ -30,18 +30,20 @@ describe('aggregateByDestinationState', () => {
     expect(result).toEqual([
       {
         state: 'PA',
+        totalShipments: 2,
         totalPieces: 150,
         lanes: [lanes[0], lanes[1]],
       },
       {
         state: 'NJ',
+        totalShipments: 1,
         totalPieces: 25,
         lanes: [lanes[2]],
       },
     ]);
   });
 
-  it('ignores lanes without destState or totalPieces', () => {
+  it('ignores lanes without destState or totalPieces when aggregating', () => {
     const lanes: Lane[] = [
       makeLane({ id: 'a', destState: 'PA', totalPieces: 100 }),
       makeLane({ id: 'b', destState: undefined, totalPieces: 50 }),
@@ -53,6 +55,7 @@ describe('aggregateByDestinationState', () => {
     expect(result).toEqual([
       {
         state: 'PA',
+        totalShipments: 1,
         totalPieces: 100,
         lanes: [lanes[0]],
       },
