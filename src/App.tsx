@@ -599,27 +599,7 @@ function App() {
             <div className="mt-0.5 text-[11px] text-text-2">
               {`Origin: ${hoveredLane.originZip ?? '08831'} · Crossdock: ${
                 hoveredLane.crossdockName ?? 'Crossdock'
-              }${hoveredLane.crossdockZip ? ` (${hoveredLane.crossdockZip})` : ''} · Destination: ${
-                hoveredLane.destName ?? hoveredLane.destination ?? 'Destination'
-              }${hoveredLane.destZip ? ` (${hoveredLane.destZip})` : ''}`}
-            </div>
-          </div>
-          <div className="px-3 py-2.5 text-sm">
-            <div className="space-y-2">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-text-2">Pieces on this lane</span>
-                <span className="font-medium text-text-1 tabular-nums">
-                  {typeof hoveredLane.totalPieces === 'number'
-                    ? hoveredLane.totalPieces.toLocaleString('en-US')
-                    : '-'}
-                </span>
-              </div>
-              {hoveredLane.carrierType && (
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-text-2">Carrier</span>
-                  <span className="font-medium text-text-1">{hoveredLane.carrierType}</span>
-                </div>
-              )}
+              }${hoveredLane.crossdockZip ? ` (${hoveredLane.crossdockZip})` : ''}`}
             </div>
           </div>
         </div>
