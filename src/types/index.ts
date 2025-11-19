@@ -18,8 +18,6 @@ export interface Region {
   centroid: [number, number]; // [longitude, latitude]
 }
 
-// Shipping cadence for Bstock flows
-export type ShippingCadence = '7d' | '6d' | '5d' | '4d';
 
 // Updated Lane interface based on new simplified CSV structure
 export interface Lane {
@@ -37,9 +35,14 @@ export interface Lane {
   // Optional breakdown data for Parcel + LTL category
   parcelOnlyPallets?: number; // Pallets from Parcel Only category
   ltlOnlyPallets?: number; // Pallets from LTL Only category
-  // Zip code data for mapping
+  // Zip code & location data for mapping
   originZip?: string;
   destinationZip?: string;
+  originCity?: string;
+  originState?: string;
+  destState?: string; // destination_2_state
+  totalPieces?: number; // Total pieces for this lane (from total_piece)
+  carrierType?: 'Warp' | 'LTL' | string;
   // New category specific fields (legacy/new mode)
   costPerTruck?: number; // Cost/Truck
   costPerParcel?: number; // Cost/Parcel
@@ -60,12 +63,6 @@ export interface Lane {
   destName?: string;
   destZip?: string;
   boxesPerGaylord?: number;
-  tomsSchedule?: Record<ShippingCadence, {
-    totalGaylordWeek: number;
-    costPerTruckWeek: number;
-    costPerGaylordWeek: number;
-    costPerBoxWeek: number;
-  }>;
   earliestPickup?: string;
   driveTime?: string;
   earliestDropoff?: string;

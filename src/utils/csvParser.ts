@@ -72,12 +72,34 @@ const parseCSVLine = (line: string): string[] => {
   return result;
 };
 
+export interface StateAggregate {
+  state: string;
+  totalPieces: number;
+  lanes: Lane[];
+}
+
+export const aggregateByDestinationState = (lanes: Lane[]): StateAggregate[] => {
+  const byState = new Map<string, { totalPieces: number; lanes: Lane[] }>();
+
+  lanes.forEach((lane) => {
+    if (!lane.destState || typeof lane.totalPieces !== 'number') return;
+    const key = lane.destState;
+    const entry = byState.get(key) ?? { totalPieces: 0, lanes: [] };
+    entry.totalPieces += lane.totalPieces || 0;
+    entry.lanes.push(lane);
+    byState.set(key, entry);
+  });
+
+  return Array.from(byState.entries())
+    .map(([state, { totalPieces, lanes }]) => ({ state, totalPieces, lanes }))
+    .sort((a, b) => a.state.localeCompare(b.state));
+};
 
 
 // Load Bstock single CSV and map to lanes (new category)
 export const loadCSVData = async (): Promise<Lane[]> => {
   try {
-    const res = await fetch('/toms/csv/toms.csv');
+    const res = await fetch('/toms/csv/bstock.csv');
     if (!res.ok) throw new Error(`Failed to load Bstock CSV: ${res.status}`);
     const text = await res.text();
 
@@ -93,118 +115,95 @@ export const loadCSVData = async (): Promise<Lane[]> => {
     const idx = (h: string) => headers.findIndex(x => x.trim().toLowerCase() === h);
 
     const i_origin = idx('origin');
+    const i_origin_state = idx('origin_state');
     const i_origin_zip = idx('origin_zip');
 
     const i_d1 = idx('destination_1');
     const i_d1_zip = idx('destination_1_zip');
     const i_d2 = idx('destination_2');
+    const i_d2_state = idx('destination_2_state');
     const i_d2_zip = idx('destination_2_zip');
-    const i_boxes_per_gaylord = idx('boxes_per_gaylord');
-    const i_tg_7 = idx('total_gaylord_7d_week');
-    const i_ct_7 = idx('cost_per_truck_7d_week');
-    const i_cg_7 = idx('cost_per_gaylord_7d_week');
-    const i_cb_7 = idx('cost_per_box_7d_week');
-    const i_tg_6 = idx('total_gaylord_6d_week');
-    const i_ct_6 = idx('cost_per_truck_6d_week');
-    const i_cg_6 = idx('cost_per_gaylord_6d_week');
-    const i_cb_6 = idx('cost_per_box_6d_week');
-    const i_tg_5 = idx('total_gaylord_5d_week');
-    const i_ct_5 = idx('cost_per_truck_5d_week');
-    const i_cg_5 = idx('cost_per_gaylord_5d_week');
-    const i_cb_5 = idx('cost_per_box_5d_week');
-    const i_tg_4 = idx('total_gaylord_4d_week');
-    const i_ct_4 = idx('cost_per_truck_4d_week');
-    const i_cg_4 = idx('cost_per_gaylord_4d_week');
-    const i_cb_4 = idx('cost_per_box_4d_week');
-    const i_ep = idx('earliest_pickup');
-    const i_dt = idx('drive_time');
-    const i_ed = idx('earliest_dropoff');
-    const i_mmit = idx('middle_mile_time_in_transit');
+    const i_total_piece = idx('total_piece');
+    const i_rate = idx('rate');
+    const i_carrier = idx('carrier');
+
+    // Ensure required columns are present
+    const requiredIndices = [i_origin_zip, i_d1_zip, i_d2_zip, i_d2_state, i_total_piece, i_carrier];
+    if (requiredIndices.some((i) => i === -1)) {
+      throw new Error('Bstock CSV is missing one or more required columns: origin_zip, destination_1_zip, destination_2_zip, destination_2_state, total_piece, carrier');
+    }
 
     const lanes: Lane[] = [];
+    const originZipSet = new Set<string>();
 
     for (let i = 1; i < lines.length; i++) {
       const row = parseCSVLine(lines[i]);
       if (!row.length) continue;
 
-      const originCode = cleanFCCode(row[i_origin] ?? 'TX');
+      const originZip = extractZip(row[i_origin_zip] ?? '');
+      if (!originZip) continue;
 
-      const crossdockName = (row[i_d1] ?? '').trim();
+      const originCity = i_origin >= 0 ? (row[i_origin] ?? '').trim() : '';
+      const originState = i_origin_state >= 0 ? (row[i_origin_state] ?? '').trim() : '';
+
+      const crossdockName = i_d1 >= 0 ? (row[i_d1] ?? '').trim() : '';
       const crossdockZip = extractZip(row[i_d1_zip] ?? '');
-      const destName = (row[i_d2] ?? '').trim();
+      const destName = i_d2 >= 0 ? (row[i_d2] ?? '').trim() : '';
       const destZip = extractZip(row[i_d2_zip] ?? '');
+      const destState = (row[i_d2_state] ?? '').trim();
 
-      if (!crossdockZip || !destZip) continue;
+      // Require crossdock, final destination, and destination state to render a lane
+      if (!crossdockZip || !destZip || !destState) continue;
 
-      const boxesPerGaylord = parseNumber(row[i_boxes_per_gaylord] ?? '0');
+      const totalPieces = parseNumber(row[i_total_piece] ?? '0');
+      const rate = parseCurrency(row[i_rate] ?? '');
+      const carrierRaw = (row[i_carrier] ?? '').trim();
+      const carrierNorm = carrierRaw.toLowerCase() === 'warp'
+        ? 'Warp'
+        : carrierRaw.toLowerCase() === 'ltl'
+          ? 'LTL'
+          : (carrierRaw || 'LTL');
 
-      const schedule = {
-        '7d': {
-          totalGaylordWeek: parseNumber(row[i_tg_7] ?? '0'),
-          costPerTruckWeek: parseCurrency(row[i_ct_7] ?? '0'),
-          costPerGaylordWeek: parseCurrency(row[i_cg_7] ?? '0'),
-          costPerBoxWeek: parseCurrency(row[i_cb_7] ?? '0')
-        },
-        '6d': {
-          totalGaylordWeek: parseNumber(row[i_tg_6] ?? '0'),
-          costPerTruckWeek: parseCurrency(row[i_ct_6] ?? '0'),
-          costPerGaylordWeek: parseCurrency(row[i_cg_6] ?? '0'),
-          costPerBoxWeek: parseCurrency(row[i_cb_6] ?? '0')
-        },
-        '5d': {
-          totalGaylordWeek: parseNumber(row[i_tg_5] ?? '0'),
-          costPerTruckWeek: parseCurrency(row[i_ct_5] ?? '0'),
-          costPerGaylordWeek: parseCurrency(row[i_cg_5] ?? '0'),
-          costPerBoxWeek: parseCurrency(row[i_cb_5] ?? '0')
-        },
-        '4d': {
-          totalGaylordWeek: parseNumber(row[i_tg_4] ?? '0'),
-          costPerTruckWeek: parseCurrency(row[i_ct_4] ?? '0'),
-          costPerGaylordWeek: parseCurrency(row[i_cg_4] ?? '0'),
-          costPerBoxWeek: parseCurrency(row[i_cb_4] ?? '0')
-        }
-      } as Lane['tomsSchedule'];
+      originZipSet.add(originZip);
 
-      const earliestPickup = (row[i_ep] ?? '').trim();
-      const driveTime = (row[i_dt] ?? '').trim();
-      const earliestDropoff = (row[i_ed] ?? '').trim();
-      const middleMileTransit = (row[i_mmit] ?? '').trim();
+      // Map origin_state (e.g., "NJ") to an FCCode for compatibility with the rest of the app
+      const originFc: FCCode = cleanFCCode(originState || 'TX');
 
-      // Use per-row origin_zip if available; fallback to 75238
-      const originZip = extractZip(row[i_origin_zip] ?? '75238');
-
-      const id = `${originZip}-${crossdockZip}-${destZip}`;
+      const id = `${originZip}-${crossdockZip}-${destZip}-${i}`;
 
       const lane: Lane = {
         id,
         category: 'new',
-        origin: originCode,
+        origin: originFc,
         destination: destName || destZip,
-        parcelsPerPallet: 55,
+        parcelsPerPallet: 1,
         palletsPerDay: 0,
-        maxPalletCount: 30,
-        shippingCharge: 0,
+        maxPalletCount: 0,
+        shippingCharge: rate,
         costPerPalletBreakdown: 0,
         costPerParcelFullUtilization: 0,
         numberOfTrucks: 0,
-        // Zip fields used by map
-        originZip: originZip,
+        // Zip & location fields used by the map
+        originZip,
         destinationZip: destZip,
-        // Bstock specific
-        tomsOriginZip: originZip,
+        originCity,
+        originState,
+        // Bstock-specific routing fields
         crossdockName,
         crossdockZip,
-        destName: destName,
-        destZip: destZip,
-        boxesPerGaylord,
-        tomsSchedule: schedule!,
-        earliestPickup,
-        driveTime,
-        earliestDropoff,
-        middleMileTransit
+        destName: destName || destZip,
+        destZip,
+        destState,
+        totalPieces,
+        carrierType: carrierNorm
       };
 
       lanes.push(lane);
+    }
+
+    // Validate that there is only a single origin zip as expected
+    if (originZipSet.size > 1) {
+      throw new Error(`Bstock CSV expected a single origin_zip but found ${originZipSet.size}: ${Array.from(originZipSet).join(', ')}`);
     }
 
     return lanes;

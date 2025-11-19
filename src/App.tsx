@@ -3,10 +3,9 @@ import LaneTable from './components/LaneTable';
 
 
 import { LaneMap } from './components/LaneMap';
-import { AppState, Lane, TruckConfiguration, LaneCategory, ShippingCadence } from './types';
+import { AppState, Lane, TruckConfiguration, LaneCategory } from './types';
 import { filterLanesByCategory } from './utils/calculations';
 import { loadCSVData } from './utils/csvParser';
-import { formatCurrencyUSD, formatCurrencyUSDFixed2 } from './utils/format';
 import seedData from './data/seed.json';
 
 
@@ -32,12 +31,12 @@ function App() {
 
   // Track hidden groups for map visibility
   const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(new Set());
-  // Shipping cadence selector (default 7d)
-  const [cadence, setCadence] = useState<ShippingCadence>('7d');
 
 
   // Resizable layout state
-  const [leftWidth, setLeftWidth] = useState(50); // Percentage
+  // Start the table at a narrower width so its columns fit comfortably,
+  // leaving the rest of the horizontal space to the map.
+  const [leftWidth, setLeftWidth] = useState(25); // Percentage
   const [isResizing, setIsResizing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -272,22 +271,6 @@ function App() {
             <img src="/toms/media/logo.svg" alt="Bstock logo" className="h-6 opacity-90" />
             <span className="text-xs text-text-2">Pricing Proposal</span>
           </div>
-          {/* Cadence selector */}
-          <div className="flex items-center gap-3 text-xs">
-            <span className="text-text-2">Cadence</span>
-            <div className="segmented" role="group" aria-label="Shipping cadence">
-              {(['7d','6d','5d','4d'] as ShippingCadence[]).map(c => (
-                <button
-                  key={c}
-                  aria-pressed={cadence === c}
-                  onClick={() => setCadence(c)}
-                  className="segmented-item"
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
 
@@ -309,20 +292,6 @@ function App() {
                 </h1>
                 <p className="text-xs text-text-2">{filteredLanes.length} lanes</p>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => window.dispatchEvent(new Event('lanetable:expandAll'))}
-                  className="px-3 py-1.5 rounded-md text-xs bg-accent text-black hover:brightness-110 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
-                >
-                  Expand All
-                </button>
-                <button
-                  onClick={() => window.dispatchEvent(new Event('lanetable:collapseAll'))}
-                  className="px-3 py-1.5 rounded-md text-xs bg-surface-2 border border-brd-1 text-text-1 hover:bg-surface-3 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
-                >
-                  Collapse All
-                </button>
-              </div>
             </div>
           </div>
 
@@ -337,7 +306,6 @@ function App() {
               hiddenGroups={hiddenGroups}
               onToggleGroupVisibility={toggleGroupVisibility}
               activeCategory={appState.activeCategory}
-              cadence={cadence}
             />
           </div>
         </div>
@@ -371,7 +339,6 @@ function App() {
               hoveredLane={hoveredLane}
               onLaneSelect={handleLaneClick}
               activeCategory={appState.activeCategory}
-              cadence={cadence}
             />
           </div>
         </div>
@@ -391,105 +358,37 @@ function App() {
         >
           <div className="px-3 pt-2 pb-1.5 border-b border-white/10">
             <div className="text-[15px] font-semibold text-text-1">
-              {`Dallas, TX → ${hoveredLane.crossdockName ?? 'Crossdock'} → ${hoveredLane.destName ?? hoveredLane.destination}`}
+              {`${hoveredLane.originCity ?? 'Monroe Township'}, ${hoveredLane.originState ?? 'NJ'} ${
+                hoveredLane.originZip ?? '08831'
+              } → ${
+                hoveredLane.destState ?? hoveredLane.destName ?? hoveredLane.destination ?? 'Destination'
+              }`}
             </div>
             <div className="mt-0.5 text-[11px] text-text-2">
-              {`DFW (75238) · ${hoveredLane.crossdockName} (${hoveredLane.crossdockZip}) · ${hoveredLane.destName} (${hoveredLane.destZip})`}
+              {`Origin: ${hoveredLane.originZip ?? '08831'} · Crossdock: ${
+                hoveredLane.crossdockName ?? 'Crossdock'
+              }${hoveredLane.crossdockZip ? ` (${hoveredLane.crossdockZip})` : ''} · Destination: ${
+                hoveredLane.destName ?? hoveredLane.destination ?? 'Destination'
+              }${hoveredLane.destZip ? ` (${hoveredLane.destZip})` : ''}`}
             </div>
           </div>
           <div className="px-3 py-2.5 text-sm">
-            {(() => {
-              const c = hoveredLane.tomsSchedule?.[cadence];
-              if (!c) return null;
-              const bpg = hoveredLane.boxesPerGaylord || 0;
-              const boxesWk = (c.totalGaylordWeek || 0) * bpg;
-              return (
-                <div className="space-y-3">
-                  <div>
-                    <div className="text-[11px] font-semibold tracking-[0.16em] uppercase text-text-2/80 mb-0.5">
-                      Volume
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="text-text-2">Gaylords/week</span>
-                        <span className="font-medium text-text-1 tabular-nums">{c.totalGaylordWeek}</span>
-                      </div>
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="text-text-2">Boxes/gaylord</span>
-                        <span className="font-medium text-text-1 tabular-nums">{bpg}</span>
-                      </div>
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="text-text-2">Boxes/week</span>
-                        <span className="font-medium text-text-1 tabular-nums">{boxesWk}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-semibold tracking-[0.16em] uppercase text-text-2/80 mb-0.5">
-                      Cost
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="text-text-2">Weekly cost</span>
-                        <div className="flex items-baseline justify-end gap-2">
-                          <span className="font-semibold text-emerald-400 tabular-nums">
-                            {formatCurrencyUSD(c.costPerTruckWeek)}
-                          </span>
-                          <span className="inline-flex items-center rounded-full border border-brd-2 bg-white/5 px-2 py-0.5 text-[11px] text-text-2">
-                            per truck
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-baseline justify-between gap-3 pl-5">
-                        <span className="text-text-2" />
-                        <div className="flex items-baseline justify-end gap-2">
-                          <span className="font-semibold text-emerald-400 tabular-nums">
-                            {formatCurrencyUSD(c.costPerGaylordWeek)}
-                          </span>
-                          <span className="inline-flex items-center rounded-full border border-brd-2 bg-white/5 px-2 py-0.5 text-[11px] text-text-2">
-                            per gaylord
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-baseline justify-between gap-3 pl-5">
-                        <span className="text-text-2" />
-                        <div className="flex items-baseline justify-end gap-2">
-                          <span className="font-semibold text-purple-400 tabular-nums">
-                            {formatCurrencyUSDFixed2(c.costPerBoxWeek)}
-                          </span>
-                          <span className="inline-flex items-center rounded-full border border-brd-2 bg-white/5 px-2 py-0.5 text-[11px] text-text-2">
-                            per box
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-semibold tracking-[0.16em] uppercase text-text-2/80 mb-0.5">
-                      Timing
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="text-text-2">Earliest pickup</span>
-                        <span className="text-text-1">{hoveredLane.earliestPickup || '-'}</span>
-                      </div>
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="text-text-2">Drive time</span>
-                        <span className="text-text-1">{hoveredLane.driveTime || '-'}</span>
-                      </div>
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="text-text-2">Earliest dropoff</span>
-                        <span className="text-text-1">{hoveredLane.earliestDropoff || '-'}</span>
-                      </div>
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="text-text-2">Transit</span>
-                        <span className="text-text-1">{hoveredLane.middleMileTransit || '-'}</span>
-                      </div>
-                    </div>
-                  </div>
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-text-2">Pieces on this lane</span>
+                <span className="font-medium text-text-1 tabular-nums">
+                  {typeof hoveredLane.totalPieces === 'number'
+                    ? hoveredLane.totalPieces.toLocaleString('en-US')
+                    : '-'}
+                </span>
+              </div>
+              {hoveredLane.carrierType && (
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-text-2">Carrier</span>
+                  <span className="font-medium text-text-1">{hoveredLane.carrierType}</span>
                 </div>
-              );
-            })()}
+              )}
+            </div>
           </div>
         </div>
       )}

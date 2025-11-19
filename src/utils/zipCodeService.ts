@@ -1,6 +1,8 @@
 // Zip code to coordinates mapping service
 // This service provides coordinates for zip codes used in the CSV data
 
+import usZips from 'us-zips';
+
 export interface ZipCodeCoordinates {
   zipCode: string;
   latitude: number;
@@ -9,7 +11,8 @@ export interface ZipCodeCoordinates {
   state?: string;
 }
 
-// Known zip codes from the CSV files with their coordinates
+// Known zip codes from the CSV files with their coordinates. These act as
+// overrides/corrections on top of the generic US ZIP dataset.
 export const ZIP_CODE_COORDINATES: Record<string, ZipCodeCoordinates> = {
   // Origin zip codes (Fulfillment Centers) - corrected based on CSV data
   '75201': { zipCode: '75201', latitude: 32.7767, longitude: -96.7970, city: 'Dallas', state: 'TX' }, // DFW
@@ -20,8 +23,9 @@ export const ZIP_CODE_COORDINATES: Record<string, ZipCodeCoordinates> = {
   '98101': { zipCode: '98101', latitude: 47.6062, longitude: -122.3321, city: 'Seattle', state: 'WA' }, // SEA (WA) - corrected
   '89109': { zipCode: '89109', latitude: 36.1215, longitude: -115.1739, city: 'Las Vegas', state: 'NV' }, // LAS (NV) - corrected
 
-  // Bstock canonical origin (DFW)
+  // Bstock canonical origins (legacy DFW and Monroe Township, NJ)
   '75238': { zipCode: '75238', latitude: 32.8824, longitude: -96.7075, city: 'Dallas', state: 'TX' },
+  '08831': { zipCode: '08831', latitude: 40.3356, longitude: -74.4335, city: 'Monroe Township', state: 'NJ' },
 
   // Bstock crossdocks
   '90021': { zipCode: '90021', latitude: 34.0346, longitude: -118.2410, city: 'Los Angeles', state: 'CA' }, // LAX
@@ -118,20 +122,114 @@ export const ZIP_CODE_COORDINATES: Record<string, ZipCodeCoordinates> = {
   '3301': { zipCode: '03301', latitude: 43.2081, longitude: -71.5376, city: 'Concord', state: 'NH' } // Handle 4-digit zip
 };
 
-// Get coordinates for a zip code
-export const getZipCodeCoordinates = (zipCode: string): ZipCodeCoordinates | null => {
-  const cleanZipCode = zipCode.trim();
-  return ZIP_CODE_COORDINATES[cleanZipCode] || null;
+// Approximate centroid coordinates for US states, used as a fallback when a
+// destination ZIP is not present in ZIP_CODE_COORDINATES. This lets us still
+// draw all lanes at a state level even if we do not have every individual ZIP.
+const STATE_COORDINATES: Record<string, { latitude: number; longitude: number }> = {
+  AL: { latitude: 32.8067, longitude: -86.7911 },
+  AK: { latitude: 64.2008, longitude: -149.4937 },
+  AZ: { latitude: 34.0489, longitude: -111.0937 },
+  AR: { latitude: 34.9697, longitude: -92.3731 },
+  CA: { latitude: 36.7783, longitude: -119.4179 },
+  CO: { latitude: 39.5501, longitude: -105.7821 },
+  CT: { latitude: 41.6032, longitude: -73.0877 },
+  DE: { latitude: 38.9108, longitude: -75.5277 },
+  FL: { latitude: 27.6648, longitude: -81.5158 },
+  GA: { latitude: 32.1656, longitude: -82.9001 },
+  HI: { latitude: 19.8968, longitude: -155.5828 },
+  ID: { latitude: 44.0682, longitude: -114.7420 },
+  IL: { latitude: 40.6331, longitude: -89.3985 },
+  IN: { latitude: 40.5512, longitude: -85.6024 },
+  IA: { latitude: 41.8780, longitude: -93.0977 },
+  KS: { latitude: 39.0119, longitude: -98.4842 },
+  KY: { latitude: 37.8393, longitude: -84.2700 },
+  LA: { latitude: 31.2448, longitude: -92.1450 },
+  ME: { latitude: 45.2538, longitude: -69.4455 },
+  MD: { latitude: 39.0458, longitude: -76.6413 },
+  MA: { latitude: 42.4072, longitude: -71.3824 },
+  MI: { latitude: 44.3148, longitude: -85.6024 },
+  MN: { latitude: 46.7296, longitude: -94.6859 },
+  MS: { latitude: 32.3547, longitude: -89.3985 },
+  MO: { latitude: 37.9643, longitude: -91.8318 },
+  MT: { latitude: 46.8797, longitude: -110.3626 },
+  NE: { latitude: 41.4925, longitude: -99.9018 },
+  NV: { latitude: 38.8026, longitude: -116.4194 },
+  NH: { latitude: 43.1939, longitude: -71.5724 },
+  NJ: { latitude: 40.0583, longitude: -74.4057 },
+  NM: { latitude: 34.5199, longitude: -105.8701 },
+  NY: { latitude: 43.2994, longitude: -74.2179 },
+  NC: { latitude: 35.7596, longitude: -79.0193 },
+  ND: { latitude: 47.5515, longitude: -101.0020 },
+  OH: { latitude: 40.4173, longitude: -82.9071 },
+  OK: { latitude: 35.4676, longitude: -97.5164 },
+  OR: { latitude: 43.8041, longitude: -120.5542 },
+  PA: { latitude: 41.2033, longitude: -77.1945 },
+  RI: { latitude: 41.5801, longitude: -71.4774 },
+  SC: { latitude: 33.8361, longitude: -81.1637 },
+  SD: { latitude: 43.9695, longitude: -99.9018 },
+  TN: { latitude: 35.5175, longitude: -86.5804 },
+  TX: { latitude: 31.9686, longitude: -99.9018 },
+  UT: { latitude: 39.3210, longitude: -111.0937 },
+  VT: { latitude: 44.5588, longitude: -72.5778 },
+  VA: { latitude: 37.4316, longitude: -78.6569 },
+  WA: { latitude: 47.7511, longitude: -120.7401 },
+  WV: { latitude: 38.5976, longitude: -80.4549 },
+  WI: { latitude: 43.7844, longitude: -88.7879 },
+  WY: { latitude: 43.0759, longitude: -107.2903 },
+  DC: { latitude: 38.9072, longitude: -77.0369 }
 };
 
-// Get all available zip codes
+export const getStateCoordinates = (stateCode: string): ZipCodeCoordinates | null => {
+  const code = stateCode.trim().toUpperCase();
+  const coord = STATE_COORDINATES[code];
+  if (!coord) return null;
+  return {
+    zipCode: code,
+    latitude: coord.latitude,
+    longitude: coord.longitude,
+    state: code
+  };
+};
+
+
+// Get coordinates for a zip code. We first check our curated overrides and
+// then fall back to the full US ZIP dataset so every valid zip in the CSV has
+// a coordinate.
+export const getZipCodeCoordinates = (zipCode: string): ZipCodeCoordinates | null => {
+  const cleanZipCode = zipCode.trim();
+  if (!cleanZipCode) return null;
+
+  // 1) Prefer explicit overrides/corrections defined in ZIP_CODE_COORDINATES.
+  const override = ZIP_CODE_COORDINATES[cleanZipCode];
+  if (override) return override;
+
+  // 2) Fall back to the generic US ZIP dataset.
+  const generic = (usZips as any)[cleanZipCode] as
+    | { latitude: number; longitude: number; city?: string; state?: string }
+    | undefined;
+
+  if (generic && typeof generic.latitude === 'number' && typeof generic.longitude === 'number') {
+    return {
+      zipCode: cleanZipCode,
+      latitude: generic.latitude,
+      longitude: generic.longitude,
+      city: generic.city,
+      state: generic.state
+    };
+  }
+
+  return null;
+};
+
+// Get all available zip codes from the curated overrides only. This is used
+// for display/diagnostics and avoids pulling in the entire US ZIP list.
 export const getAllZipCodes = (): string[] => {
   return Object.keys(ZIP_CODE_COORDINATES);
 };
 
-// Validate if a zip code has coordinates
+// Validate if a zip code has coordinates using the same lookup logic as above.
 export const hasZipCodeCoordinates = (zipCode: string): boolean => {
-  return zipCode.trim() in ZIP_CODE_COORDINATES;
+  return getZipCodeCoordinates(zipCode) !== null;
 };
 
 // Get coordinates for origin and destination zip codes

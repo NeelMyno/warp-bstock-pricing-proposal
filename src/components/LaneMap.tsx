@@ -6,9 +6,9 @@ import { Map as ReactMap, Marker } from 'react-map-gl/maplibre';
 import { PathStyleExtension } from '@deck.gl/extensions';
 import { RotateCcw } from 'lucide-react';
 import type { Layer } from '@deck.gl/core';
-import { Lane, LaneCategory, ShippingCadence } from '../types';
-import { getZipCodeCoordinates } from '../utils/zipCodeService';
-import { formatCurrencyUSD, formatCurrencyUSDFixed2 } from '../utils/format';
+import { Lane, LaneCategory } from '../types';
+import { getZipCodeCoordinates, getStateCoordinates } from '../utils/zipCodeService';
+import { aggregateByDestinationState, StateAggregate } from '../utils/csvParser';
 
 interface LaneMapProps {
   lanes: Lane[];
@@ -16,7 +16,6 @@ interface LaneMapProps {
   hoveredLane: Lane | null;
   onLaneSelect: (lane: Lane) => void;
   activeCategory: LaneCategory;
-  cadence?: ShippingCadence;
 }
 
 // Map style - using a reliable raster style
@@ -61,6 +60,18 @@ const INITIAL_VIEW_STATE = {
 const ACCENT: [number, number, number] = [0, 255, 51];
 
 
+const WARP_RGB: [number, number, number] = [34, 197, 94]; // green
+const LTL_RGB: [number, number, number] = [59, 130, 246]; // blue
+
+const getCarrierColor = (carrierType?: string): [number, number, number] => {
+  const normalized = carrierType?.trim().toLowerCase();
+  if (normalized === 'warp') return WARP_RGB;
+  if (normalized === 'ltl') return LTL_RGB;
+  // Default to LTL blue for any unknown/mixed carrier label
+  return LTL_RGB;
+};
+
+
 
 
 
@@ -70,7 +81,6 @@ export const LaneMap: React.FC<LaneMapProps> = ({
   hoveredLane,
   onLaneSelect,
   activeCategory: _activeCategory,
-  cadence
 }) => {
   // State for controlling the view
   const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
@@ -194,6 +204,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
         }));
         setCrossdockMarkers(coords.filter(Boolean) as CrossdockMarker[]);
       } catch (e) {
+
         console.error('Failed to load crossdock locations', e);
       }
     };
@@ -229,6 +240,37 @@ export const LaneMap: React.FC<LaneMapProps> = ({
 
 
 
+
+
+  // Aggregated view by destination state for tooltips & synchronized map behavior
+  const stateAggregates = useMemo<StateAggregate[]>(
+    () => aggregateByDestinationState(lanes),
+    [lanes]
+  );
+
+  const stateAggregateMap = useMemo(() => {
+    const map = new Map<string, StateAggregate>();
+    stateAggregates.forEach((agg) => {
+      map.set(agg.state, agg);
+    });
+    return map;
+  }, [stateAggregates]);
+
+  const hoveredState = useMemo(() => {
+    if (hoveredLane?.destState) return hoveredLane.destState;
+
+    if (mapHoveredLaneId) {
+      const lane = lanes.find((l) => l.id === mapHoveredLaneId);
+      if (lane?.destState) return lane.destState;
+    }
+
+    if (mapHoveredCrossdockZip) {
+      const lane = lanes.find((l) => l.crossdockZip && l.crossdockZip === mapHoveredCrossdockZip && l.destState);
+      if (lane?.destState) return lane.destState;
+    }
+
+    return null;
+  }, [hoveredLane, mapHoveredLaneId, mapHoveredCrossdockZip, lanes]);
 
 
 
@@ -371,49 +413,75 @@ export const LaneMap: React.FC<LaneMapProps> = ({
     const seenCross = new Set<string>();
     const seenDest = new Set<string>();
 
-    lanes.forEach(lane => {
-      const originZip = lane.originZip || lane.tomsOriginZip || '75238';
+    lanes.forEach((lane) => {
+      const originZip = lane.originZip || lane.tomsOriginZip || '08831';
       const crossZip: string = lane.crossdockZip ?? '';
       const destZip: string = (lane.destZip ?? lane.destinationZip) ?? '';
 
       const originC = getZipCodeCoordinates(originZip);
       const crossC = crossZip ? getZipCodeCoordinates(crossZip) : null;
-      const destC = destZip ? getZipCodeCoordinates(destZip) : null;
+      let destC = destZip ? getZipCodeCoordinates(destZip) : null;
+
+      // Fallback: if we don't have an exact ZIP coordinate for the destination,
+      // use the approximate centroid of the destination state so that every
+      // lane into that state still renders on the map.
+      if (!destC && lane.destState) {
+        destC = getStateCoordinates(lane.destState) ?? null;
+      }
+
       if (!originC || !crossC || !destC) return;
 
       // Origin point (unique by origin zip)
       if (!seenOrigin.has(originZip)) {
+        const originLabel =
+          lane.originCity && lane.originState
+            ? `${lane.originCity}, ${lane.originState}`
+            : 'Monroe Township, NJ';
+
         points.push({
           position: [originC.longitude, originC.latitude],
-          color: [255, 255, 255], // White for origin
+          color: [255, 255, 255],
           radius: 8,
           type: 'origin',
-          label: 'Dallas, TX',
+          label: originLabel,
           zipCode: originZip
         });
         seenOrigin.add(originZip);
       }
 
-      // Leg 1: origin → crossdock (solid green)
+      const isStateHovered =
+        hoveredState && lane.destState && lane.destState === hoveredState;
+      const isSelected = selectedLane?.id === lane.id;
+      const isDirectHover =
+        hoveredLane?.id === lane.id || mapHoveredLaneId === lane.id;
+
+      const hovered = Boolean(isStateHovered || isDirectHover);
+      const baseColor = getCarrierColor(lane.carrierType);
+
+      // Leg 1: origin  crossdock (per-lane, colored by carrier)
       arcs.push({
         sourcePosition: [originC.longitude, originC.latitude],
         targetPosition: [crossC.longitude, crossC.latitude],
         lane,
-        color: [0, 255, 51],
-        width: 3,
-        selected: selectedLane?.id === lane.id,
-        hovered: (hoveredLane?.id === lane.id) || (mapHoveredLaneId === lane.id),
+        color: baseColor,
+        width: 2,
+        selected: isSelected,
+        hovered,
         leg: 'o-c'
       });
 
-      // Leg 2: crossdock → destination (dotted white @50% opacity)
-      (paths as any[]).push({
-        path: [[crossC.longitude, crossC.latitude], [destC.longitude, destC.latitude]],
+
+      // Leg 2: crossdock → destination (per-lane, colored by carrier)
+      paths.push({
+        path: [
+          [crossC.longitude, crossC.latitude],
+          [destC.longitude, destC.latitude]
+        ],
         lane,
-        color: [255, 255, 255, 128],
+        color: baseColor,
         width: 2,
-        selected: selectedLane?.id === lane.id,
-        hovered: (hoveredLane?.id === lane.id) || (mapHoveredLaneId === lane.id) || (mapHoveredCrossdockZip ? lane.crossdockZip === mapHoveredCrossdockZip : false),
+        selected: isSelected,
+        hovered,
         leg: 'c-d'
       });
 
@@ -421,8 +489,8 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       if (!seenCross.has(crossZip)) {
         points.push({
           position: [crossC.longitude, crossC.latitude],
-          color: [0, 255, 51],
-          radius: 6,
+          color: [255, 255, 255],
+          radius: 5,
           type: 'crossdock',
           label: lane.crossdockName ?? 'Crossdock',
           zipCode: crossZip
@@ -434,7 +502,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       if (!seenDest.has(destZip)) {
         points.push({
           position: [destC.longitude, destC.latitude],
-          color: [200, 200, 200],
+          color: baseColor,
           radius: 5,
           type: 'destination',
           label: lane.destName ?? lane.destination,
@@ -446,7 +514,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
     });
 
     return { arcData: arcs, pathData: paths, pointData: points };
-  }, [lanes, selectedLane, hoveredLane, mapHoveredLaneId, mapHoveredCrossdockZip]);
+  }, [lanes, selectedLane, hoveredLane, mapHoveredLaneId, hoveredState]);
 
 
 
@@ -460,68 +528,72 @@ export const LaneMap: React.FC<LaneMapProps> = ({
 
   // Create layers
   // Whether any map hover is active (table or map)
-  const anyMapHover = Boolean(hoveredLane?.id || mapHoveredLaneId || mapHoveredCrossdockZip);
+  const anyMapHover = Boolean(hoveredLane?.id || mapHoveredLaneId || mapHoveredCrossdockZip || hoveredState);
   const dimRGB = (c: [number, number, number], f = 0.35): [number, number, number] => [
     Math.round(c[0] * f), Math.round(c[1] * f), Math.round(c[2] * f)
   ];
 
   const layers = [
-    // Arc layer for lane connections
+    // Arc layer for origin → crossdock (per-lane, colored by carrier)
     new ArcLayer({
       id: 'lane-arcs',
       data: arcData,
       getSourcePosition: (d: any) => d.sourcePosition,
       getTargetPosition: (d: any) => d.targetPosition,
       getSourceColor: (d: any) => {
-        if (d.selected || d.hovered) return ACCENT; // Accent on select/hover
-        if (anyMapHover) return dimRGB(d.color); // Dim when something else is hovered
-        return d.color; // Default lane color
+        const base = d.color as [number, number, number];
+        const alphaStrong = 230;
+        const alphaMedium = 160;
+        const alphaDim = 80;
+
+        if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
+        if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
+        return [base[0], base[1], base[2], alphaMedium];
       },
       getTargetColor: (d: any) => {
-        if (d.selected || d.hovered) return ACCENT;
-        if (anyMapHover) return dimRGB(d.color);
-        return d.color;
-      },
-      getWidth: (d: any) => d.selected ? d.width * 2 : d.width,
+        const base = d.color as [number, number, number];
+        const alphaStrong = 230;
+        const alphaMedium = 160;
+        const alphaDim = 80;
 
-      pickable: true,
-      onHover: (info: any) => {
-        if (info.object?.lane) {
-          setHoverState(info.object.lane.id, info.object.lane.crossdockZip ?? null);
-        } else {
-          setHoverState(null, null);
-        }
+        if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
+        if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
+        return [base[0], base[1], base[2], alphaMedium];
       },
-      onClick: (info: any) => {
-        if (info.object?.lane) {
-          onLaneSelect(info.object.lane);
-        }
-      },
+      getWidth: (d: any) => (d.selected ? (d.width ?? 2) * 2 : (d.width ?? 2)),
+      widthUnits: 'pixels',
+      pickable: false,
       transitions: {
         getSourceColor: transitionMs,
         getTargetColor: transitionMs,
         getWidth: transitionMs
       },
       updateTriggers: {
-        getSourceColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, mapHoveredCrossdockZip],
-        getTargetColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, mapHoveredCrossdockZip],
+        getSourceColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, hoveredState],
+        getTargetColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, hoveredState],
         getWidth: [selectedLane?.id]
       }
     }) as Layer,
 
-    // Dotted white paths for Crossdock → Destination
+    // Crossdock → Destination (per-lane, colored by carrier: Warp = green, LTL = blue)
     new PathLayer({
       id: 'lane-dotted-paths',
       data: pathData,
       getPath: (d: any) => d.path,
       getColor: (d: any) => {
-        if (d.selected) return [0, 255, 51, 220];
-        const groupHovered = mapHoveredCrossdockZip && d?.lane?.crossdockZip === mapHoveredCrossdockZip;
-        if (d.hovered || groupHovered) return [ACCENT[0], ACCENT[1], ACCENT[2], 220];
-        if (anyMapHover) return [d.color[0], d.color[1], d.color[2], 80];
-        return d.color; // includes alpha 128 for 50% opacity
+        const base = d.color as [number, number, number];
+        const alphaStrong = 230;
+        const alphaMedium = 160;
+        const alphaDim = 80;
+
+        if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
+        if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
+        return [base[0], base[1], base[2], alphaMedium];
       },
-      getWidth: (d: any) => d.selected ? d.width * 2 : d.width,
+      getWidth: (d: any) => {
+        const base = d.width ?? 2;
+        return d.selected ? base * 2 : base;
+      },
       widthUnits: 'pixels',
       pickable: true,
       onHover: (info: any) => {
@@ -534,28 +606,29 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       onClick: (info: any) => {
         if (info.object?.lane) onLaneSelect(info.object.lane);
       },
-      extensions: [new PathStyleExtension({dash: true})],
+      extensions: [new PathStyleExtension({ dash: true })],
       getDashArray: () => [2, 4], // dotted
       transitions: {
         getColor: transitionMs,
         getWidth: transitionMs
       },
       updateTriggers: {
-        getColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, mapHoveredCrossdockZip],
+        getColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, hoveredState],
         getWidth: [selectedLane?.id]
       }
     }) as Layer,
 
-    // White ring to represent origin point(s)
+    // 100-mile radius ring around origin (next-day delivery zone)
     new ScatterplotLayer({
-      id: 'origin-ring',
+      id: 'origin-radius',
       data: pointData.filter((d: any) => d.type === 'origin'),
       getPosition: (d: any) => d.position,
-      filled: true,
-      stroked: false,
-      getFillColor: [255, 255, 255],
-      getLineColor: [0, 0, 0],
-      getRadius: (d: any) => (d.radius ?? 8) * 3000,
+      filled: false,
+      stroked: true,
+      getFillColor: [0, 0, 0, 0],
+      getLineColor: [255, 255, 255, 160],
+      radiusUnits: 'meters',
+      getRadius: () => 160934, // ~100 miles
       lineWidthUnits: 'pixels',
       getLineWidth: 2,
       pickable: false
@@ -608,11 +681,6 @@ export const LaneMap: React.FC<LaneMapProps> = ({
 
 
 
-  // Selected cadence with default fallback
-  const cadenceVal: ShippingCadence = (cadence ?? '7d') as ShippingCadence;
-
-
-
   return (
     <div className="h-full w-full relative" onMouseLeave={() => setHoverState(null, null)}>
       <DeckGL
@@ -658,69 +726,44 @@ export const LaneMap: React.FC<LaneMapProps> = ({
             return style;
           };
           if (object?.lane) {
-            // Do not show tooltip for dotted white lines (crossdock → destination)
-            if (object.leg === 'c-d') return null;
             const lane = object.lane as Lane;
-            const c = lane.tomsSchedule?.[cadenceVal];
-            const bpg = lane.boxesPerGaylord || 0;
-            const gay = c?.totalGaylordWeek || 0;
-            const boxesWk = gay * bpg;
-            const title = `Dallas, TX → ${lane.crossdockName ?? 'Crossdock'} → ${lane.destName ?? lane.destination}`;
+
+            // Aggregate by destination state so that hovering any lane into a state
+            // shows a single tooltip and highlights all of those lanes.
+            const stateKey = lane.destState ?? null;
+            if (!stateKey) return null;
+
+            const aggregate = stateAggregateMap.get(stateKey);
+            const totalPieces = aggregate?.totalPieces ?? lane.totalPieces ?? 0;
+
+
+            const originCity = lane.originCity ?? 'Monroe Township';
+            const originState = lane.originState ?? 'NJ';
+            const originZip = lane.originZip ?? '08831';
+            const destinationState = stateKey;
+            const formattedPieces = Number.isFinite(totalPieces)
+              ? totalPieces.toLocaleString('en-US')
+              : '-';
+
+            const title = `${originCity}, ${originState} ${originZip} → ${destinationState}`;
+
             return {
               html: `
-                <div class="max-w-lg rounded-2xl border border-brd-1 bg-surface-1/95 shadow-elev-2 backdrop-blur-2xl px-3 py-2.5 text-sm">
+                <div class="max-w-md rounded-2xl border border-brd-1 bg-surface-1/95 shadow-elev-2 backdrop-blur-2xl px-3 py-2.5 text-sm">
                   <div class="text-[15px] font-semibold text-text-1 mb-0.5">${title}</div>
                   <div class="text-[11px] text-text-2 mb-2">
-                    DFW (75238) · ${lane.crossdockName ?? 'Crossdock'} (${lane.crossdockZip ?? ''}) · ${lane.destName ?? lane.destination} (${lane.destZip ?? ''})
+                    Origin: ${originCity}, ${originState} ${originZip}<br/>
+                    Destination state: ${destinationState}
                   </div>
-                  <div class="space-y-3 text-xs">
-                    <div>
-                      <div class="text-[11px] font-semibold tracking-[0.16em] uppercase text-text-2/80 mb-0.5">Volume</div>
-                      <div class="space-y-1">
-                        <div class="flex items-baseline justify-between gap-3"><span class="text-text-2">Gaylords/week</span><span class="font-medium text-text-1 tabular-nums">${gay}</span></div>
-                        <div class="flex items-baseline justify-between gap-3"><span class="text-text-2">Boxes/gaylord</span><span class="font-medium text-text-1 tabular-nums">${bpg}</span></div>
-                        <div class="flex items-baseline justify-between gap-3"><span class="text-text-2">Boxes/week</span><span class="font-medium text-text-1 tabular-nums">${boxesWk}</span></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div class="text-[11px] font-semibold tracking-[0.16em] uppercase text-text-2/80 mb-0.5">Cost</div>
-                      <div class="space-y-1">
-                        <div class="flex items-baseline justify-between gap-3">
-                          <span class="text-text-2">Weekly cost</span>
-                          <div class="flex items-baseline justify-end gap-2">
-                            <span class="font-semibold text-emerald-400 tabular-nums">${formatCurrencyUSD(c?.costPerTruckWeek || 0)}</span>
-                            <span class="inline-flex items-center rounded-full border border-brd-2 bg-white/5 px-2 py-0.5 text-[11px] text-text-2">per truck</span>
-                          </div>
-                        </div>
-                        <div class="flex items-baseline justify-between gap-3 pl-5">
-                          <span class="text-text-2"></span>
-                          <div class="flex items-baseline justify-end gap-2">
-                            <span class="font-semibold text-emerald-400 tabular-nums">${formatCurrencyUSD(c?.costPerGaylordWeek || 0)}</span>
-                            <span class="inline-flex items-center rounded-full border border-brd-2 bg-white/5 px-2 py-0.5 text-[11px] text-text-2">per gaylord</span>
-                          </div>
-                        </div>
-                        <div class="flex items-baseline justify-between gap-3 pl-5">
-                          <span class="text-text-2"></span>
-                          <div class="flex items-baseline justify-end gap-2">
-                            <span class="font-semibold text-purple-400 tabular-nums">${formatCurrencyUSDFixed2(c?.costPerBoxWeek || 0)}</span>
-                            <span class="inline-flex items-center rounded-full border border-brd-2 bg-white/5 px-2 py-0.5 text-[11px] text-text-2">per box</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      <div class="text-[11px] font-semibold tracking-[0.16em] uppercase text-text-2/80 mb-0.5">Timing</div>
-                      <div class="space-y-1">
-                        <div class="flex items-baseline justify-between gap-3"><span class="text-text-2">Earliest pickup</span><span class="text-text-1">${lane.earliestPickup ?? '-'}</span></div>
-                        <div class="flex items-baseline justify-between gap-3"><span class="text-text-2">Drive time</span><span class="text-text-1">${lane.driveTime ?? '-'}</span></div>
-                        <div class="flex items-baseline justify-between gap-3"><span class="text-text-2">Earliest dropoff</span><span class="text-text-1">${lane.earliestDropoff ?? '-'}</span></div>
-                        <div class="flex items-baseline justify-between gap-3"><span class="text-text-2">Transit</span><span class="text-text-1">${lane.middleMileTransit ?? '-'}</span></div>
-                      </div>
+                  <div class="space-y-2 text-xs">
+                    <div class="flex items-baseline justify-between gap-3">
+                      <span class="text-text-2">Total pieces into ${destinationState}</span>
+                      <span class="font-semibold text-text-1 tabular-nums">${formattedPieces}</span>
                     </div>
                   </div>
                 </div>
               `,
-              style: _tooltipStyle(420)
+              style: _tooltipStyle(360)
             };
           }
           if (object?.type === 'origin') {
@@ -784,32 +827,36 @@ export const LaneMap: React.FC<LaneMapProps> = ({
 
       </div>
 
-      {/* Legend (concise) */}
-      <div className="absolute top-4 right-4 bg-surface-2/90 p-3 rounded-md border border-brd-1">
-        {/* Lanes */}
-        <div className="space-y-1 mb-2">
-          <div className="flex items-center space-x-2">
-            <div className="w-6 h-0.5 rounded" style={{ backgroundColor: '#00ff33' }}></div>
-            <span className="text-text-1 text-xs">Dallas, TX → Crossdock</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-6 h-0.5 rounded" style={{ backgroundColor: '#ffffff' }}></div>
-            <span className="text-text-1 text-xs">Crossdock → Destination</span>
-          </div>
-        </div>
-        {/* Markers */}
+      {/* Legend (Bstock) */}
+      <div className="absolute top-4 right-4 bg-surface-2/90 p-3 rounded-md border border-brd-1 space-y-2">
+        {/* Lanes by carrier */}
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
+            <div className="w-6 h-0.5 rounded" style={{ backgroundColor: 'rgb(34,197,94)' }}></div>
+            <span className="text-text-1 text-xs">Warp lanes</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-6 h-0.5 rounded" style={{ backgroundColor: 'rgb(59,130,246)' }}></div>
+            <span className="text-text-1 text-xs">LTL lanes</span>
+          </div>
+        </div>
+        {/* Markers & zone */}
+        <div className="space-y-1 pt-1 border-t border-brd-1/40">
+          <div className="flex items-center space-x-2">
             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#ffffff' }}></div>
-            <span className="text-text-1 text-xs">Dallas, TX</span>
+            <span className="text-text-1 text-xs">Origin: Monroe Township, NJ</span>
           </div>
           <div className="flex items-center space-x-2">
             <img src="/warp_crossdock/warp_warehouse.svg" alt="Crossdock" className="w-4 h-4 opacity-80" />
-            <span className="text-text-1 text-xs">Crossdock Terminals</span>
+            <span className="text-text-1 text-xs">Crossdock terminals</span>
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#cccccc' }}></div>
-            <span className="text-text-1 text-xs">Destinations</span>
+            <span className="text-text-1 text-xs">Destination zips</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-3 rounded-full border border-white/60"></div>
+            <span className="text-text-1 text-xs">100-mile next-day zone</span>
           </div>
         </div>
       </div>
