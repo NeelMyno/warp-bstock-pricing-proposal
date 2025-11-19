@@ -92,7 +92,13 @@ export const aggregateByDestinationState = (lanes: Lane[]): StateAggregate[] => 
 
   return Array.from(byState.entries())
     .map(([state, { totalPieces, lanes }]) => ({ state, totalPieces, lanes }))
-    .sort((a, b) => a.state.localeCompare(b.state));
+    .sort((a, b) => {
+      // Sort primarily by total pieces (descending), then by state code (ascending)
+      if (b.totalPieces !== a.totalPieces) {
+        return b.totalPieces - a.totalPieces;
+      }
+      return a.state.localeCompare(b.state);
+    });
 };
 
 

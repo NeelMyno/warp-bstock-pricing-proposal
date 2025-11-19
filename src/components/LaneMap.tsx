@@ -533,11 +533,68 @@ export const LaneMap: React.FC<LaneMapProps> = ({
     Math.round(c[0] * f), Math.round(c[1] * f), Math.round(c[2] * f)
   ];
 
+  // Split lane geometry by carrier so we can draw LTL first and Warp on top,
+  // ensuring green Warp lanes visually sit above blue LTL lanes.
+  const splitByCarrier = <T extends { lane?: Lane }>(data: T[]) => {
+    const warp: T[] = [];
+    const nonWarp: T[] = [];
+    data.forEach((d) => {
+      const type = (d.lane?.carrierType ?? '').toLowerCase();
+      if (type === 'warp') warp.push(d);
+      else nonWarp.push(d);
+    });
+    return { warp, nonWarp };
+  };
+
+  const { warp: warpArcData, nonWarp: ltlArcData } = splitByCarrier(arcData as any[]);
+  const { warp: warpPathData, nonWarp: ltlPathData } = splitByCarrier(pathData as any[]);
+
   const layers = [
-    // Arc layer for origin → crossdock (per-lane, colored by carrier)
+    // Arc layers for origin → crossdock (per-lane, colored by carrier)
+    // Draw LTL first, then Warp so green Warp arcs sit visually above blue LTL arcs.
     new ArcLayer({
-      id: 'lane-arcs',
-      data: arcData,
+      id: 'lane-arcs-ltl',
+      data: ltlArcData,
+      getSourcePosition: (d: any) => d.sourcePosition,
+      getTargetPosition: (d: any) => d.targetPosition,
+      getSourceColor: (d: any) => {
+        const base = d.color as [number, number, number];
+        const alphaStrong = 230;
+        const alphaMedium = 160;
+        const alphaDim = 80;
+
+        if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
+        if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
+        return [base[0], base[1], base[2], alphaMedium];
+      },
+      getTargetColor: (d: any) => {
+        const base = d.color as [number, number, number];
+        const alphaStrong = 230;
+        const alphaMedium = 160;
+        const alphaDim = 80;
+
+        if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
+        if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
+        return [base[0], base[1], base[2], alphaMedium];
+      },
+      getWidth: (d: any) => (d.selected ? (d.width ?? 2) * 2 : (d.width ?? 2)),
+      widthUnits: 'pixels',
+      pickable: false,
+      transitions: {
+        getSourceColor: transitionMs,
+        getTargetColor: transitionMs,
+        getWidth: transitionMs
+      },
+      updateTriggers: {
+        getSourceColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, hoveredState],
+        getTargetColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, hoveredState],
+        getWidth: [selectedLane?.id]
+      }
+    }) as Layer,
+
+    new ArcLayer({
+      id: 'lane-arcs-warp',
+      data: warpArcData,
       getSourcePosition: (d: any) => d.sourcePosition,
       getTargetPosition: (d: any) => d.targetPosition,
       getSourceColor: (d: any) => {
@@ -576,9 +633,52 @@ export const LaneMap: React.FC<LaneMapProps> = ({
     }) as Layer,
 
     // Crossdock → Destination (per-lane, colored by carrier: Warp = green, LTL = blue)
+    // Draw LTL first, then Warp so green Warp paths sit visually above blue LTL paths.
     new PathLayer({
-      id: 'lane-dotted-paths',
-      data: pathData,
+      id: 'lane-dotted-paths-ltl',
+      data: ltlPathData,
+      getPath: (d: any) => d.path,
+      getColor: (d: any) => {
+        const base = d.color as [number, number, number];
+        const alphaStrong = 230;
+        const alphaMedium = 160;
+        const alphaDim = 80;
+
+        if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
+        if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
+        return [base[0], base[1], base[2], alphaMedium];
+      },
+      getWidth: (d: any) => {
+        const base = d.width ?? 2;
+        return d.selected ? base * 2 : base;
+      },
+      widthUnits: 'pixels',
+      pickable: true,
+      onHover: (info: any) => {
+        if (info.object?.lane) {
+          setHoverState(info.object.lane.id, info.object.lane.crossdockZip ?? null);
+        } else {
+          setHoverState(null, null);
+        }
+      },
+      onClick: (info: any) => {
+        if (info.object?.lane) onLaneSelect(info.object.lane);
+      },
+      extensions: [new PathStyleExtension({ dash: true })],
+      getDashArray: () => [2, 4], // dotted
+      transitions: {
+        getColor: transitionMs,
+        getWidth: transitionMs
+      },
+      updateTriggers: {
+        getColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, hoveredState],
+        getWidth: [selectedLane?.id]
+      }
+    }) as Layer,
+
+    new PathLayer({
+      id: 'lane-dotted-paths-warp',
+      data: warpPathData,
       getPath: (d: any) => d.path,
       getColor: (d: any) => {
         const base = d.color as [number, number, number];
