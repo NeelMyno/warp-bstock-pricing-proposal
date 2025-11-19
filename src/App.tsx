@@ -1,12 +1,19 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import type React from 'react';
+
 import LaneTable from './components/LaneTable';
 
 
 import { LaneMap } from './components/LaneMap';
 import { AppState, Lane, TruckConfiguration, LaneCategory } from './types';
 import { filterLanesByCategory } from './utils/calculations';
-import { loadCSVData } from './utils/csvParser';
+import { loadCSVData, aggregateByDestinationState, StateAggregate } from './utils/csvParser';
 import seedData from './data/seed.json';
+
+
+
+type CarrierFilter = 'all' | 'warp' | 'ltl';
+
 
 
 function App() {
@@ -31,6 +38,14 @@ function App() {
 
   // Track hidden groups for map visibility
   const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(new Set());
+
+
+
+	  // Bstock-specific filters and focus state
+	  const [carrierFilter, setCarrierFilter] = useState<CarrierFilter>('all');
+	  const [minPiecesFilter, setMinPiecesFilter] = useState<number>(0);
+	  const [focusedState, setFocusedState] = useState<string | null>(null);
+
 
 
   // Resizable layout state
@@ -144,6 +159,10 @@ function App() {
       ...prev,
       selectedLane: lane
     }));
+
+    if (appState.activeCategory === 'new' && lane.destState) {
+      setFocusedState((current) => (current === lane.destState ? null : lane.destState || null));
+    }
   };
 
   const handleLaneHover = (lane: Lane | null) => {
@@ -162,6 +181,14 @@ function App() {
       return newSet;
     });
   };
+
+	  const handleMinPiecesInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+	    const raw = event.target.value.replace(/,/g, '');
+	    const next = Number(raw);
+	    setMinPiecesFilter(Number.isFinite(next) ? Math.max(0, next) : 0);
+	  };
+
+
 
   // Resizable layout handlers
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -214,10 +241,95 @@ function App() {
 
 
   // Filter lanes based on active category
-  const filteredLanes = filterLanesByCategory(appState.lanes, appState.activeCategory);
+  const categoryFilteredLanes = useMemo(
+    () => filterLanesByCategory(appState.lanes, appState.activeCategory),
+    [appState.lanes, appState.activeCategory]
+  );
+
+  // Bstock-specific lane filtering by carrier
+  const carrierFilteredLanes = useMemo(() => {
+    if (appState.activeCategory !== 'new') return categoryFilteredLanes;
+    if (carrierFilter === 'all') return categoryFilteredLanes;
+
+    return categoryFilteredLanes.filter((lane) => {
+      const type = (lane.carrierType ?? '').toLowerCase();
+      if (carrierFilter === 'warp') return type === 'warp';
+      if (carrierFilter === 'ltl') return type === 'ltl';
+      return true;
+    });
+  }, [categoryFilteredLanes, appState.activeCategory, carrierFilter]);
+
+  // Aggregate by destination state for header metrics and volume-based filtering
+  const stateAggregatesForFilters: StateAggregate[] = useMemo(() => {
+    if (appState.activeCategory !== 'new') return [];
+    return aggregateByDestinationState(carrierFilteredLanes);
+  }, [carrierFilteredLanes, appState.activeCategory]);
+
+  // Apply minimum total shipments per state filter (Bstock only)
+  const fullyFilteredLanes = useMemo(() => {
+    if (appState.activeCategory !== 'new') return carrierFilteredLanes;
+
+    if (!minPiecesFilter || minPiecesFilter <= 0) {
+      return carrierFilteredLanes;
+    }
+
+    const allowedStates = new Set(
+      stateAggregatesForFilters
+        .filter((agg) => agg.totalPieces >= minPiecesFilter)
+        .map((agg) => agg.state)
+    );
+
+    if (allowedStates.size === 0) return [];
+
+    return carrierFilteredLanes.filter(
+      (lane) => lane.destState && allowedStates.has(lane.destState)
+    );
+  }, [carrierFilteredLanes, stateAggregatesForFilters, minPiecesFilter, appState.activeCategory]);
+
+  const filteredLanes = fullyFilteredLanes;
+
+  // Derived Bstock header metrics
+  const bstockMetrics = useMemo(() => {
+    if (appState.activeCategory !== 'new') {
+      return null;
+    }
+
+    const totalPieces = stateAggregatesForFilters.reduce(
+      (sum, agg) => sum + (typeof agg.totalPieces === 'number' ? agg.totalPieces : 0),
+      0
+    );
+    const stateCount = stateAggregatesForFilters.length;
+
+    let warpPieces = 0;
+    let ltlPieces = 0;
+    carrierFilteredLanes.forEach((lane) => {
+      if (typeof lane.totalPieces !== 'number') return;
+      const type = (lane.carrierType ?? '').toLowerCase();
+      if (type === 'warp') warpPieces += lane.totalPieces;
+      else if (type === 'ltl') ltlPieces += lane.totalPieces;
+    });
+
+    const warpShare = totalPieces > 0 ? warpPieces / totalPieces : 0;
+    const ltlShare = totalPieces > 0 ? ltlPieces / totalPieces : 0;
+
+    const maxPiecesPerState = stateAggregatesForFilters.reduce(
+      (max, agg) => (agg.totalPieces > max ? agg.totalPieces : max),
+      0
+    );
+
+    return {
+      totalPieces,
+      stateCount,
+      warpShare,
+      ltlShare,
+      maxPiecesPerState
+    };
+  }, [appState.activeCategory, stateAggregatesForFilters, carrierFilteredLanes]);
 
   // Filter lanes for map (exclude hidden crossdock groups)
-  const mapLanes = filteredLanes.filter(lane => !hiddenGroups.has(lane.crossdockName ?? 'Crossdock'));
+  const mapLanes = filteredLanes.filter(
+    (lane) => !hiddenGroups.has(lane.crossdockName ?? 'Crossdock')
+  );
 
   if (loading) {
     return (
@@ -285,14 +397,90 @@ function App() {
         >
           {/* Header Bar with controls */}
           <div className="bg-surface-2 border-b border-brd-1 px-4 py-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-4">
               <div>
                 <h1 className="text-lg font-bold text-white">
                   {getCategoryDisplayName(appState.activeCategory)} Lanes
                 </h1>
-                <p className="text-xs text-text-2">{filteredLanes.length} lanes</p>
+                <p className="text-xs text-text-2">
+                  {filteredLanes.length} lanes
+                  {appState.activeCategory === 'new' && bstockMetrics && (
+                    <>
+                      {' | '}
+                      {bstockMetrics.stateCount} states
+                      {' | '}
+                      {bstockMetrics.totalPieces.toLocaleString('en-US')} pieces
+                    </>
+                  )}
+                </p>
               </div>
+              {appState.activeCategory === 'new' && bstockMetrics && (
+                <div className="hidden md:flex items-center gap-4 text-[11px] text-text-2">
+                  <div className="flex items-baseline gap-1">
+                    <span className="uppercase tracking-wide text-[10px] text-text-2">Warp share</span>
+                    <span className="text-text-1 font-medium tabular-nums">
+                      {(bstockMetrics.warpShare * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="uppercase tracking-wide text-[10px] text-text-2">LTL share</span>
+                    <span className="text-text-1 font-medium tabular-nums">
+                      {(bstockMetrics.ltlShare * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
+
+            {appState.activeCategory === 'new' && (
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                {/* Carrier filter chips */}
+                <div className="flex items-center gap-1">
+                  <span className="text-[11px] text-text-2 mr-1">Carriers:</span>
+                  {(['all', 'warp', 'ltl'] as CarrierFilter[]).map((value) => {
+                    const isActive = carrierFilter === value;
+                    const label =
+                      value === 'all' ? 'Warp + LTL' : value === 'warp' ? 'Warp only' : 'LTL only';
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setCarrierFilter(value)}
+                        className={`px-2 py-0.5 rounded-full text-[11px] border transition-colors duration-150 ${
+                          isActive
+                            ? 'bg-accent/20 border-accent text-accent'
+                            : 'bg-surface-1 border-brd-1 text-text-2 hover:bg-surface-3/60'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Volume threshold */}
+                <div className="flex items-center gap-1">
+                  <span className="text-[11px] text-text-2">Min total shipments/state:</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={minPiecesFilter || ''}
+                    onChange={handleMinPiecesInputChange}
+                    className="w-24 px-2 py-0.5 rounded border border-brd-1 bg-surface-1 text-[11px] text-text-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40"
+                    placeholder="0"
+                  />
+                  {minPiecesFilter > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setMinPiecesFilter(0)}
+                      className="text-[11px] text-accent hover:underline ml-1"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Table Container */}
@@ -323,12 +511,30 @@ function App() {
         >
           {/* Map Header Bar */}
           <div className="bg-surface-2 border-b border-brd-1 px-4 py-2">
-            <h1 className="text-lg font-bold text-white">
-              Lane Network Map
-            </h1>
-            <p className="text-xs text-text-2">
-              Interactive visualization of {getCategoryDisplayName(appState.activeCategory)} lanes
-            </p>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h1 className="text-lg font-bold text-white">
+                  Lane Network Map
+                </h1>
+                <p className="text-xs text-text-2">
+                  Interactive visualization of {getCategoryDisplayName(appState.activeCategory)} lanes
+                </p>
+              </div>
+              {focusedState && appState.activeCategory === 'new' && (
+                <div className="flex items-center gap-2 text-[11px] text-accent">
+                  <span className="px-2 py-0.5 rounded-full bg-accent/10 border border-accent/40">
+                    Focused on <span className="font-semibold">{focusedState}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setFocusedState(null)}
+                    className="text-[11px] text-text-2 hover:text-accent"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Map Container - Fixed height */}
@@ -339,6 +545,7 @@ function App() {
               hoveredLane={hoveredLane}
               onLaneSelect={handleLaneClick}
               activeCategory={appState.activeCategory}
+              focusedState={focusedState}
             />
           </div>
         </div>

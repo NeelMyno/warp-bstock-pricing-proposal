@@ -82,7 +82,13 @@ export default function LaneTable({
               {activeCategory === 'new' ? (
                 <>
                   <th className="text-right py-3 px-4 font-semibold uppercase tracking-wide text-[11px] whitespace-nowrap">
-                    Total pieces
+                    Total shipments
+                  </th>
+                  <th className="text-right py-3 px-4 font-semibold uppercase tracking-wide text-[11px] whitespace-nowrap">
+                    Warp vs LTL
+                  </th>
+                  <th className="text-right py-3 px-4 font-semibold uppercase tracking-wide text-[11px] whitespace-nowrap">
+                    Dest ZIPs
                   </th>
                 </>
               ) : (
@@ -91,16 +97,47 @@ export default function LaneTable({
                   <th className="text-right py-3 px-4 font-semibold uppercase tracking-wide text-[11px] whitespace-nowrap">Trucks/Day</th>
                   <th className="text-right py-3 px-4 font-semibold uppercase tracking-wide text-[11px] whitespace-nowrap">Truck Utilization</th>
                   <th className="text-right py-3 px-4 font-semibold uppercase tracking-wide text-[11px] whitespace-nowrap">Shipping Charge 53</th>
+
                   <th className="text-right py-3 px-4 font-semibold uppercase tracking-wide text-[11px] whitespace-nowrap">Cost/Pallet Breakdown 53</th>
                 </>
               )}
             </tr>
           </thead>
           <tbody>
+            {activeCategory === 'new' && stateAggregates.length === 0 && (
+              <tr>
+                <td colSpan={4} className="py-6 px-4 text-center text-xs text-text-2">
+                  No states match the current filters. Adjust carrier or volume filters to see lanes.
+                </td>
+              </tr>
+            )}
+
             {activeCategory === 'new' &&
               stateAggregates.map((agg, idx) => {
                 const representativeLane = agg.lanes[0];
                 if (!representativeLane) return null;
+
+                // Per-state carrier mix and destination ZIP counts
+                let warpPieces = 0;
+                let ltlPieces = 0;
+                const destZips = new Set<string>();
+
+                agg.lanes.forEach((lane) => {
+                  if (typeof lane.totalPieces === 'number') {
+                    const type = (lane.carrierType ?? '').toLowerCase();
+                    if (type === 'warp') warpPieces += lane.totalPieces;
+                    else if (type === 'ltl') ltlPieces += lane.totalPieces;
+                  }
+                  if (lane.destZip) {
+                    destZips.add(String(lane.destZip));
+                  }
+                });
+
+                const totalPieces = typeof agg.totalPieces === 'number' ? agg.totalPieces : 0;
+                const warpShare = totalPieces > 0 ? (warpPieces / totalPieces) * 100 : 0;
+                const ltlShare = totalPieces > 0 ? (ltlPieces / totalPieces) * 100 : 0;
+                const zipCount = destZips.size;
+
                 const isSelected = selectedLane?.id === representativeLane.id;
                 const stickyBg = isSelected
                   ? 'bg-surface-3'
@@ -124,7 +161,10 @@ export default function LaneTable({
                       }`}
                       style={{ minWidth: 80 }}
                     >
-                      <div className="ml-1 py-0">
+                      <div className="ml-1 py-0 flex items-center gap-2">
+                        <span className="text-[11px] text-text-2 tabular-nums w-5 text-right">
+                          {idx + 1}
+                        </span>
                         <span className="text-text-1 text-sm">{agg.state}</span>
                       </div>
                     </td>
@@ -133,6 +173,22 @@ export default function LaneTable({
                         <span className="text-text-1 text-sm tabular-nums">
                           {formatNumber(agg.totalPieces, 0)}
                         </span>
+                      </div>
+                    </td>
+                    <td className="py-1 px-4">
+                      <div className="text-right text-[11px] text-text-2 tabular-nums">
+                        <span>
+                          Warp {warpShare.toFixed(0)}%
+                        </span>
+                        <span className="mx-1">{' | '}</span>
+                        <span>
+                          LTL {ltlShare.toFixed(0)}%
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-1 px-4">
+                      <div className="text-right text-[11px] text-text-2 tabular-nums">
+                        {zipCount.toLocaleString('en-US')} ZIP{zipCount === 1 ? '' : 's'}
                       </div>
                     </td>
                   </tr>

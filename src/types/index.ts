@@ -41,7 +41,7 @@ export interface Lane {
   originCity?: string;
   originState?: string;
   destState?: string; // destination_2_state
-  totalPieces?: number; // Total pieces for this lane (from total_piece)
+  totalPieces?: number; // Total shipments for this lane (from total_piece)
   carrierType?: 'Warp' | 'LTL' | string;
   // New category specific fields (legacy/new mode)
   costPerTruck?: number; // Cost/Truck

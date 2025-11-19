@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import DeckGL from '@deck.gl/react';
-import { ArcLayer, ScatterplotLayer, PathLayer } from '@deck.gl/layers';
+import { ArcLayer, ScatterplotLayer, PathLayer, IconLayer } from '@deck.gl/layers';
 import { FlyToInterpolator } from '@deck.gl/core';
 import { Map as ReactMap, Marker } from 'react-map-gl/maplibre';
 import { PathStyleExtension } from '@deck.gl/extensions';
@@ -16,6 +16,7 @@ interface LaneMapProps {
   hoveredLane: Lane | null;
   onLaneSelect: (lane: Lane) => void;
   activeCategory: LaneCategory;
+  focusedState: string | null;
 }
 
 // Map style - using a reliable raster style
@@ -81,6 +82,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
   hoveredLane,
   onLaneSelect,
   activeCategory: _activeCategory,
+  focusedState,
 }) => {
   // State for controlling the view
   const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
@@ -104,7 +106,8 @@ export const LaneMap: React.FC<LaneMapProps> = ({
     if (typeof window === 'undefined' || !('matchMedia' in window)) return false;
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }, []);
-  const transitionMs = prefersReducedMotion ? 0 : 120;
+  // Disable visual tween for instant hover/dim changes
+  const transitionMs = 0;
 
   // Crossdock locations state
   type CrossdockMarker = {
@@ -116,6 +119,48 @@ export const LaneMap: React.FC<LaneMapProps> = ({
     state: string;
   };
   const [crossdockMarkers, setCrossdockMarkers] = useState<CrossdockMarker[]>([]);
+
+  // Origin locations derived from lane data (for Costco markers)
+  type OriginMarker = {
+    lng: number;
+    lat: number;
+    zip: string;
+    label: string;
+  };
+
+  const originMarkers: OriginMarker[] = useMemo(() => {
+    const byZip = new Map<string, OriginMarker>();
+
+    lanes.forEach((lane) => {
+      const rawZip = lane.originZip || lane.tomsOriginZip || '08831';
+      const originZip = rawZip.trim();
+      if (!originZip || byZip.has(originZip)) return;
+
+      const originC = getZipCodeCoordinates(originZip);
+      if (!originC) return;
+
+      const labelFromLane =
+        lane.originCity && lane.originState
+          ? `${lane.originCity}, ${lane.originState}`
+          : undefined;
+      const labelFromZip =
+        originC.city && originC.state
+          ? `${originC.city}, ${originC.state}`
+          : undefined;
+
+      const label = labelFromLane || labelFromZip || 'Origin';
+
+      byZip.set(originZip, {
+        zip: originZip,
+        lng: originC.longitude,
+        lat: originC.latitude,
+        label,
+      });
+    });
+
+    return Array.from(byZip.values());
+  }, [lanes]);
+
 
   // Load crossdock locations (CSV in public/warp_crossdock)
   useEffect(() => {
@@ -271,6 +316,13 @@ export const LaneMap: React.FC<LaneMapProps> = ({
 
     return null;
   }, [hoveredLane, mapHoveredLaneId, mapHoveredCrossdockZip, lanes]);
+
+  const highlightState = useMemo(
+    () => hoveredState || focusedState || null,
+    [hoveredState, focusedState]
+  );
+
+
 
 
 
@@ -449,13 +501,13 @@ export const LaneMap: React.FC<LaneMapProps> = ({
         seenOrigin.add(originZip);
       }
 
-      const isStateHovered =
-        hoveredState && lane.destState && lane.destState === hoveredState;
+      const isStateHighlighted =
+        highlightState && lane.destState && lane.destState === highlightState;
       const isSelected = selectedLane?.id === lane.id;
       const isDirectHover =
         hoveredLane?.id === lane.id || mapHoveredLaneId === lane.id;
 
-      const hovered = Boolean(isStateHovered || isDirectHover);
+      const hovered = Boolean(isStateHighlighted || isDirectHover);
       const baseColor = getCarrierColor(lane.carrierType);
 
       // Leg 1: origin  crossdock (per-lane, colored by carrier)
@@ -514,7 +566,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
     });
 
     return { arcData: arcs, pathData: paths, pointData: points };
-  }, [lanes, selectedLane, hoveredLane, mapHoveredLaneId, hoveredState]);
+  }, [lanes, selectedLane, hoveredLane, mapHoveredLaneId, hoveredState, highlightState]);
 
 
 
@@ -527,8 +579,13 @@ export const LaneMap: React.FC<LaneMapProps> = ({
 
 
   // Create layers
-  // Whether any map hover is active (table or map)
-  const anyMapHover = Boolean(hoveredLane?.id || mapHoveredLaneId || mapHoveredCrossdockZip || hoveredState);
+  // Whether any map hover or focus is active (table, map, or state focus)
+  const anyMapHover = Boolean(
+    hoveredLane?.id ||
+    mapHoveredLaneId ||
+    mapHoveredCrossdockZip ||
+    highlightState
+  );
   const dimRGB = (c: [number, number, number], f = 0.35): [number, number, number] => [
     Math.round(c[0] * f), Math.round(c[1] * f), Math.round(c[2] * f)
   ];
@@ -561,7 +618,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
         const base = d.color as [number, number, number];
         const alphaStrong = 230;
         const alphaMedium = 160;
-        const alphaDim = 80;
+        const alphaDim = 3; // ~1% opacity
 
         if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
         if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
@@ -571,7 +628,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
         const base = d.color as [number, number, number];
         const alphaStrong = 230;
         const alphaMedium = 160;
-        const alphaDim = 80;
+        const alphaDim = 3; // ~1% opacity
 
         if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
         if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
@@ -586,8 +643,8 @@ export const LaneMap: React.FC<LaneMapProps> = ({
         getWidth: transitionMs
       },
       updateTriggers: {
-        getSourceColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, hoveredState],
-        getTargetColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, hoveredState],
+        getSourceColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, highlightState],
+        getTargetColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, highlightState],
         getWidth: [selectedLane?.id]
       }
     }) as Layer,
@@ -601,7 +658,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
         const base = d.color as [number, number, number];
         const alphaStrong = 230;
         const alphaMedium = 160;
-        const alphaDim = 80;
+        const alphaDim = 3; // ~1% opacity
 
         if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
         if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
@@ -611,7 +668,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
         const base = d.color as [number, number, number];
         const alphaStrong = 230;
         const alphaMedium = 160;
-        const alphaDim = 80;
+        const alphaDim = 3; // ~1% opacity
 
         if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
         if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
@@ -626,8 +683,8 @@ export const LaneMap: React.FC<LaneMapProps> = ({
         getWidth: transitionMs
       },
       updateTriggers: {
-        getSourceColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, hoveredState],
-        getTargetColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, hoveredState],
+        getSourceColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, highlightState],
+        getTargetColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, highlightState],
         getWidth: [selectedLane?.id]
       }
     }) as Layer,
@@ -642,7 +699,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
         const base = d.color as [number, number, number];
         const alphaStrong = 230;
         const alphaMedium = 160;
-        const alphaDim = 80;
+        const alphaDim = 3; // ~1% opacity
 
         if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
         if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
@@ -671,7 +728,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
         getWidth: transitionMs
       },
       updateTriggers: {
-        getColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, hoveredState],
+        getColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, highlightState],
         getWidth: [selectedLane?.id]
       }
     }) as Layer,
@@ -684,7 +741,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
         const base = d.color as [number, number, number];
         const alphaStrong = 230;
         const alphaMedium = 160;
-        const alphaDim = 80;
+        const alphaDim = 3; // ~1% opacity
 
         if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
         if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
@@ -713,15 +770,15 @@ export const LaneMap: React.FC<LaneMapProps> = ({
         getWidth: transitionMs
       },
       updateTriggers: {
-        getColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, hoveredState],
+        getColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, highlightState],
         getWidth: [selectedLane?.id]
       }
     }) as Layer,
 
-    // 100-mile radius ring around origin (next-day delivery zone)
+    // 100-mile radius ring around the 07036 crossdock (next-day delivery zone)
     new ScatterplotLayer({
       id: 'origin-radius',
-      data: pointData.filter((d: any) => d.type === 'origin'),
+      data: pointData.filter((d: any) => d.type === 'crossdock' && d.zipCode === '07036'),
       getPosition: (d: any) => d.position,
       filled: false,
       stroked: true,
@@ -773,6 +830,27 @@ export const LaneMap: React.FC<LaneMapProps> = ({
     }) as Layer,
 
 
+    // Icon layer for origin Costco logo, drawn above all lanes and points
+    new IconLayer({
+      id: 'origin-costco-icons',
+      data: originMarkers,
+      getPosition: (d: any) => [d.lng, d.lat],
+      getIcon: () => 'costco',
+      iconAtlas: '/toms/media/costco.svg',
+      iconMapping: {
+        // costco.svg is a 1080x1080 circle; use the full icon and anchor at its center
+        costco: { x: 0, y: 0, width: 1080, height: 1080, anchorX: 540, anchorY: 540 },
+      },
+      sizeScale: 1,
+      getSize: () => 32,
+      billboard: true,
+      parameters: {
+        depthTest: false,
+      },
+    }) as Layer,
+
+
+
 
   ];
 
@@ -793,10 +871,8 @@ export const LaneMap: React.FC<LaneMapProps> = ({
           const _tooltipStyle = (maxW: number) => {
             const m = 12;
             const vw = typeof window !== 'undefined' ? window.innerWidth : 1920;
-            const vh = typeof window !== 'undefined' ? window.innerHeight : 1080;
             // Clamp position so the tooltip stays in-viewport for the requested width
             const nearRight = x > vw - maxW - m;
-            const nearBottom = y > vh / 2;
             const style: Partial<CSSStyleDeclaration> = {
               transform: 'translate3d(0,0,0)',
               willChange: 'transform',
@@ -816,13 +892,9 @@ export const LaneMap: React.FC<LaneMapProps> = ({
               style.left = `${Math.max(m, Math.min(x + m, vw - m - maxW))}px`;
               style.right = 'auto';
             }
-            if (nearBottom) {
-              style.bottom = `${m}px`;
-              style.top = 'auto';
-            } else {
-              style.top = `${y + m}px`;
-              style.bottom = 'auto';
-            }
+            // Always position relative to cursor vertically
+            style.top = `${y + m}px`;
+            style.bottom = 'auto';
             return style;
           };
           if (object?.lane) {
@@ -857,7 +929,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
                   </div>
                   <div class="space-y-2 text-xs">
                     <div class="flex items-baseline justify-between gap-3">
-                      <span class="text-text-2">Total pieces into ${destinationState}</span>
+                      <span class="text-text-2">Total shipments into ${destinationState}</span>
                       <span class="font-semibold text-text-1 tabular-nums">${formattedPieces}</span>
                     </div>
                   </div>
@@ -910,6 +982,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
               />
             </Marker>
           ))}
+
         </ReactMap>
       </DeckGL>
 
