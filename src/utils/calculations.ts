@@ -140,9 +140,10 @@ export function calculateCategoryTotalMetrics(
 
 
 
-export function formatNumber(num: number, decimals: number = 0): string {
-  // Return '-' for zero values (indicating missing data/combinations)
-  if (num === 0) return '-';
+export function formatNumber(num: number | null | undefined, decimals: number = 0): string {
+  // Treat 0 as a valid value (especially for Bstock aggregates).
+  // Only render '-' for null/undefined/NaN/non-finite.
+  if (num == null || !Number.isFinite(num)) return '-';
 
   return new Intl.NumberFormat('en-US', {
     minimumFractionDigits: decimals,
@@ -150,9 +151,9 @@ export function formatNumber(num: number, decimals: number = 0): string {
   }).format(num);
 }
 
-export function formatPercentage(num: number, decimals: number = 1): string {
-  // Return '-' for zero values (indicating missing data/combinations)
-  if (num === 0) return '-';
+export function formatPercentage(num: number | null | undefined, decimals: number = 1): string {
+  // Treat 0 as a valid value.
+  if (num == null || !Number.isFinite(num)) return '-';
 
   return `${(num * 100).toFixed(decimals)}%`;
 }

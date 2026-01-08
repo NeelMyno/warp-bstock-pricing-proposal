@@ -43,6 +43,12 @@ export interface Lane {
   destState?: string; // destination_2_state
   totalPieces?: number; // Total pieces for this shipment (from total_piece)
   carrierType?: 'Warp' | 'LTL' | string;
+
+  // Local delivery classification (origin ZIP to destination ZIP)
+  // - distanceFromOriginMiles is null when we can't compute exact ZIP-to-ZIP distance
+  // - isLocalDelivery100 is true/false when known, otherwise null
+  distanceFromOriginMiles?: number | null;
+  isLocalDelivery100?: boolean | null;
   // New category specific fields (legacy/new mode)
   costPerTruck?: number; // Cost/Truck
   costPerParcel?: number; // Cost/Parcel

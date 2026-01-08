@@ -3,7 +3,6 @@ import DeckGL from '@deck.gl/react';
 import { ArcLayer, ScatterplotLayer, PathLayer, IconLayer } from '@deck.gl/layers';
 import { FlyToInterpolator } from '@deck.gl/core';
 import { Map as ReactMap, Marker } from 'react-map-gl/maplibre';
-import { RotateCcw } from 'lucide-react';
 import type { Layer } from '@deck.gl/core';
 import { Lane, LaneCategory } from '../types';
 import { getZipCodeCoordinates, getStateCoordinates } from '../utils/zipCodeService';
@@ -14,8 +13,12 @@ interface LaneMapProps {
   selectedLane: Lane | null;
   hoveredLane: Lane | null;
   onLaneSelect: (lane: Lane) => void;
+  // Incrementing signal from parent to reset the map camera to the initial US view.
+  resetSignal?: number;
   activeCategory: LaneCategory;
   focusedState: string | null;
+	// When a focusedState is active, clicking the map background should clear it.
+	onClearFocusedState?: () => void;
 }
 
 // Map style - using a reliable raster style
@@ -63,7 +66,10 @@ const ACCENT: [number, number, number] = [0, 255, 51];
 const WARP_RGB: [number, number, number] = [34, 197, 94]; // green
 const LTL_RGB: [number, number, number] = [59, 130, 246]; // blue
 
-// Special highlight color for the short Monroe, NJ (08831)  Clark, NJ (07036) lane.
+// Highlight color for lanes classified as local deliveries (<= 100 miles)
+const LOCAL_RGB: [number, number, number] = [245, 158, 11]; // amber
+
+// Special highlight color for the short Monroe, NJ (08831) -> Clark, NJ (07036) lane.
 const MONROE_TO_CLARK_RGB: [number, number, number] = [252, 211, 77]; // yellow
 
 const getCarrierColor = (carrierType?: string): [number, number, number] => {
@@ -83,8 +89,10 @@ export const LaneMap: React.FC<LaneMapProps> = ({
   selectedLane,
   hoveredLane,
   onLaneSelect,
+  resetSignal,
   activeCategory: _activeCategory,
   focusedState,
+	onClearFocusedState,
 }) => {
   // State for controlling the view
   const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
@@ -141,16 +149,8 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       const originC = getZipCodeCoordinates(originZip);
       if (!originC) return;
 
-      const labelFromLane =
-        lane.originCity && lane.originState
-          ? `${lane.originCity}, ${lane.originState}`
-          : undefined;
-      const labelFromZip =
-        originC.city && originC.state
-          ? `${originC.city}, ${originC.state}`
-          : undefined;
-
-      const label = labelFromLane || labelFromZip || 'Origin';
+	    // Per product requirement: display origin marker as Costco (instead of a specific city name).
+	    const label = 'Costco';
 
       byZip.set(originZip, {
         zip: originZip,
@@ -277,6 +277,20 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       transitionInterpolator: new FlyToInterpolator()
     } as any);
   }, [prefersReducedMotion]);
+
+	  // Allow the parent to trigger a map camera reset while keeping a single global reset action.
+	  const lastResetSignalRef = useRef<number | undefined>(undefined);
+	  useEffect(() => {
+	    if (resetSignal == null) return;
+	    if (lastResetSignalRef.current === undefined) {
+	      lastResetSignalRef.current = resetSignal;
+	      return;
+	    }
+	    if (resetSignal !== lastResetSignalRef.current) {
+	      lastResetSignalRef.current = resetSignal;
+	      resetView();
+	    }
+	  }, [resetSignal, resetView]);
 
 
 
@@ -489,10 +503,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
 
       // Origin point (unique by origin zip)
       if (!seenOrigin.has(originZip)) {
-        const originLabel =
-          lane.originCity && lane.originState
-            ? `${lane.originCity}, ${lane.originState}`
-            : 'Monroe Township, NJ';
+	        const originLabel = 'Costco';
 
         points.push({
           position: [originC.longitude, originC.latitude],
@@ -527,8 +538,8 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       const distanceMeters = Math.sqrt(dx * dx + dy * dy) * 111000; // rough great-circle
 
       let height = 0;
-      if (isMonroeToClark) {
-        // Keep a very gentle bow for 08831  07036 so it never "shoots into space".
+	      if (isMonroeToClark) {
+	        // Keep a very gentle bow for 08831 -> 07036 so it never "shoots into space".
         height = .8;
       } else if (distanceMeters > 100_000) {
         const rawHeight = distanceMeters * 0.05;
@@ -635,6 +646,15 @@ export const LaneMap: React.FC<LaneMapProps> = ({
   const { warp: warpArcData, nonWarp: ltlArcData } = splitByCarrier(arcData as any[]);
   const { warp: warpPathData, nonWarp: ltlPathData } = splitByCarrier(pathData as any[]);
 
+	const localArcData = useMemo(
+		() => (arcData as any[]).filter((d: any) => d?.lane?.isLocalDelivery100 === true),
+		[arcData]
+	);
+	const localPathData = useMemo(
+		() => (pathData as any[]).filter((d: any) => d?.lane?.isLocalDelivery100 === true),
+		[pathData]
+	);
+
   const layers = [
     // Arc layers for origin → crossdock (per-lane, colored by carrier)
     // Draw LTL first, then Warp so green Warp arcs sit visually above blue LTL arcs.
@@ -728,6 +748,54 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       }
     }) as Layer,
 
+	    // Local-delivery overlay (origin -> destination <= 100 miles)
+	    // Draw on top of carrier arcs so local lanes are visually distinct.
+	    new ArcLayer({
+	      id: 'lane-arcs-local',
+	      data: localArcData,
+	      getSourcePosition: (d: any) => d.sourcePosition,
+	      getTargetPosition: (d: any) => d.targetPosition,
+	      getSourceColor: (d: any) => {
+	        const base = LOCAL_RGB;
+	        const alphaStrong = 255;
+	        const alphaNormal = 220;
+	        const alphaDim = 60;
+	        if (d.selected || d.hovered) return [ACCENT[0], ACCENT[1], ACCENT[2], alphaStrong];
+	        if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
+	        return [base[0], base[1], base[2], alphaNormal];
+	      },
+	      getTargetColor: (d: any) => {
+	        const base = LOCAL_RGB;
+	        const alphaStrong = 255;
+	        const alphaNormal = 220;
+	        const alphaDim = 60;
+	        if (d.selected || d.hovered) return [ACCENT[0], ACCENT[1], ACCENT[2], alphaStrong];
+	        if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
+	        return [base[0], base[1], base[2], alphaNormal];
+	      },
+	      getWidth: (d: any) => {
+	        if (d.selected) return 6;
+	        if (d.hovered) return 5;
+	        return 4;
+	      },
+	      getHeight: (d: any) => d.height ?? 15000,
+	      widthUnits: 'pixels',
+	      pickable: false,
+	      parameters: {
+	        depthTest: false,
+	      },
+	      transitions: {
+	        getSourceColor: transitionMs,
+	        getTargetColor: transitionMs,
+	        getWidth: transitionMs
+	      },
+	      updateTriggers: {
+	        getSourceColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, highlightState],
+	        getTargetColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, highlightState],
+	        getWidth: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, highlightState]
+	      }
+	    }) as Layer,
+
     // Crossdock → Destination (per-lane, colored by carrier: Warp = green, LTL = blue)
     // Draw LTL first, then Warp so green Warp paths sit visually above blue LTL paths.
     new PathLayer({
@@ -814,15 +882,49 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       }
     }) as Layer,
 
-    // 100-mile radius ring around the 07036 crossdock (next-day delivery zone)
-    new ScatterplotLayer({
-      id: 'origin-radius',
-      data: pointData.filter((d: any) => d.type === 'crossdock' && d.zipCode === '07036'),
-      getPosition: (d: any) => d.position,
+	    // Local-delivery overlay for crossdock -> destination legs
+	    new PathLayer({
+	      id: 'lane-dotted-paths-local',
+	      data: localPathData,
+	      getPath: (d: any) => d.path,
+	      getColor: (d: any) => {
+	        const base = LOCAL_RGB;
+	        const alphaStrong = 255;
+	        const alphaNormal = 220;
+	        const alphaDim = 60;
+	        if (d.selected || d.hovered) return [ACCENT[0], ACCENT[1], ACCENT[2], alphaStrong];
+	        if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
+	        return [base[0], base[1], base[2], alphaNormal];
+	      },
+	      getWidth: (d: any) => {
+	        if (d.selected) return 6;
+	        if (d.hovered) return 5;
+	        return 4;
+	      },
+	      widthUnits: 'pixels',
+	      pickable: false,
+	      parameters: {
+	        depthTest: false,
+	      },
+	      transitions: {
+	        getColor: transitionMs,
+	        getWidth: transitionMs
+	      },
+	      updateTriggers: {
+	        getColor: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, highlightState],
+	        getWidth: [selectedLane?.id, hoveredLane?.id, mapHoveredLaneId, highlightState]
+	      }
+	    }) as Layer,
+
+	    // 100-mile radius ring around the origin (local delivery zone)
+	    new ScatterplotLayer({
+	      id: 'origin-local-radius',
+	      data: originMarkers,
+	      getPosition: (d: any) => [d.lng, d.lat],
       filled: false,
       stroked: true,
       getFillColor: [0, 0, 0, 0],
-      getLineColor: [255, 255, 255, 160],
+	      getLineColor: [LOCAL_RGB[0], LOCAL_RGB[1], LOCAL_RGB[2], 160],
       radiusUnits: 'meters',
       getRadius: () => 160934, // ~100 miles
       lineWidthUnits: 'pixels',
@@ -906,6 +1008,12 @@ export const LaneMap: React.FC<LaneMapProps> = ({
         controller={true}
         layers={layers}
         pickingRadius={20}
+			onClick={(info: any) => {
+			  // Clear state focus when clicking on map background.
+			  if (!info?.object && focusedState && onClearFocusedState) {
+			    onClearFocusedState();
+			  }
+			}}
         getTooltip={({ object, x, y }: any) => {
           const _tooltipStyle = (maxW: number) => {
             const m = 12;
@@ -949,34 +1057,52 @@ export const LaneMap: React.FC<LaneMapProps> = ({
               typeof aggregate?.totalShipments === 'number'
                 ? aggregate.totalShipments
                 : aggregate?.lanes.length ?? 1;
+            const localShipments = aggregate?.localShipments ?? 0;
+            const unknownShipments = aggregate?.unknownDistanceShipments ?? 0;
+            const knownShipments = totalShipments - unknownShipments;
+            const localPct = knownShipments > 0 ? Math.round((localShipments / knownShipments) * 100) : 0;
 
-            const originCity = lane.originCity ?? 'Monroe Township';
-            const originState = lane.originState ?? 'NJ';
-            const originZip = lane.originZip ?? '08831';
             const destinationState = stateKey;
             const formattedShipments = Number.isFinite(totalShipments)
               ? totalShipments.toLocaleString('en-US')
               : '-';
+            const formattedLocal = Number.isFinite(localShipments)
+              ? localShipments.toLocaleString('en-US')
+              : '-';
+            const formattedUnknown = Number.isFinite(unknownShipments)
+              ? unknownShipments.toLocaleString('en-US')
+              : '-';
 
-            const title = `${originCity}, ${originState} ${originZip} → ${destinationState}`;
+            // Build rows
+            const rows = [
+              `<div class="flex items-baseline justify-between gap-3">
+                <span class="text-text-2">Total shipments</span>
+                <span class="font-semibold text-text-1 tabular-nums">${formattedShipments}</span>
+              </div>`,
+              `<div class="flex items-baseline justify-between gap-3">
+                <span class="text-text-2">Local (≤100mi)</span>
+                <span class="font-semibold text-text-1 tabular-nums">${formattedLocal} (${localPct}%)</span>
+              </div>`
+            ];
+            if (unknownShipments > 0) {
+              rows.push(
+                `<div class="flex items-baseline justify-between gap-3">
+                  <span class="text-text-2">Unknown distance</span>
+                  <span class="font-medium text-amber-300 tabular-nums">${formattedUnknown}</span>
+                </div>`
+              );
+            }
 
             return {
               html: `
                 <div class="max-w-md rounded-2xl border border-brd-1 bg-surface-1/95 shadow-elev-2 backdrop-blur-2xl px-3 py-2.5 text-sm">
-                  <div class="text-[15px] font-semibold text-text-1 mb-0.5">${title}</div>
-                  <div class="text-[11px] text-text-2 mb-2">
-                    Origin: ${originCity}, ${originState} ${originZip}<br/>
-                    Destination state: ${destinationState}
-                  </div>
-                  <div class="space-y-2 text-xs">
-                    <div class="flex items-baseline justify-between gap-3">
-                      <span class="text-text-2">Total shipments into ${destinationState}</span>
-                      <span class="font-semibold text-text-1 tabular-nums">${formattedShipments}</span>
-                    </div>
+                  <div class="text-[15px] font-semibold text-text-1 mb-2">State: ${destinationState}</div>
+                  <div class="space-y-1.5 text-xs">
+                    ${rows.join('')}
                   </div>
                 </div>
               `,
-              style: _tooltipStyle(360)
+              style: _tooltipStyle(320)
             };
           }
           if (object?.type === 'origin') {
@@ -984,7 +1110,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
               html: `
                 <div class="max-w-xs rounded-xl border border-brd-1 bg-surface-1/95 shadow-elev-2 backdrop-blur-2xl px-3 py-2">
                   <div class="text-sm font-semibold text-text-1">${object.label}</div>
-                  <div class="mt-0.5 text-[11px] text-text-2">Fulfillment Center</div>
+	                  <div class="mt-0.5 text-[11px] text-text-2">Origin</div>
                 </div>
               `,
               style: _tooltipStyle(320)
@@ -1027,20 +1153,6 @@ export const LaneMap: React.FC<LaneMapProps> = ({
         </ReactMap>
       </DeckGL>
 
-      {/* Control Buttons */}
-      <div className="absolute top-4 left-4 z-10 flex flex-col space-y-2">
-        <button
-          onClick={resetView}
-          className="bg-surface-2/90 hover:bg-surface-3 text-text-1 px-3 py-2 rounded-md border border-brd-1 text-sm font-medium transition-all duration-200 hover:shadow-elev-1 active:scale-[0.98] flex items-center space-x-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
-          title="Reset map view to show entire US"
-        >
-          <RotateCcw className="w-4 h-4" />
-          <span>Reset View</span>
-        </button>
-
-
-      </div>
-
       {/* Legend (Bstock) */}
       <div className="absolute top-4 right-4 bg-surface-2/90 p-3 rounded-md border border-brd-1 space-y-2">
         {/* Lanes by carrier */}
@@ -1053,12 +1165,16 @@ export const LaneMap: React.FC<LaneMapProps> = ({
             <div className="w-6 h-0.5 rounded" style={{ backgroundColor: 'rgb(59,130,246)' }}></div>
             <span className="text-text-1 text-xs">LTL lanes</span>
           </div>
+	          <div className="flex items-center space-x-2">
+	            <div className="w-6 h-0.5 rounded" style={{ backgroundColor: 'rgb(245,158,11)' }}></div>
+	            <span className="text-text-1 text-xs">Local deliveries (≤ 100mi)</span>
+	          </div>
         </div>
         {/* Markers & zone */}
         <div className="space-y-1 pt-1 border-t border-brd-1/40">
           <div className="flex items-center space-x-2">
             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#ffffff' }}></div>
-            <span className="text-text-1 text-xs">Origin: Monroe Township, NJ</span>
+	            <span className="text-text-1 text-xs">Origin: Costco</span>
           </div>
           <div className="flex items-center space-x-2">
             <img src="/warp_crossdock/warp_warehouse.svg" alt="Crossdock" className="w-4 h-4 opacity-80" />
@@ -1069,11 +1185,29 @@ export const LaneMap: React.FC<LaneMapProps> = ({
             <span className="text-text-1 text-xs">Destination zips</span>
           </div>
           <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 rounded-full border border-white/60"></div>
-            <span className="text-text-1 text-xs">100-mile next-day zone</span>
+	            <div className="w-3 h-3 rounded-full border" style={{ borderColor: 'rgba(245,158,11,0.8)' }}></div>
+	            <span className="text-text-1 text-xs">100-mile local zone</span>
           </div>
         </div>
       </div>
+
+      {/* Focused state chip */}
+      {focusedState && (
+        <div className="absolute top-4 left-4 flex items-center gap-2 rounded-full border border-brd-1 bg-surface-2/95 px-3 py-1.5 text-xs shadow-elev-1 backdrop-blur">
+          <span className="text-text-2">Focused:</span>
+          <span className="font-semibold text-text-1">{focusedState}</span>
+          <button
+            type="button"
+            onClick={onClearFocusedState}
+            className="ml-1 rounded-full p-0.5 text-text-2 hover:bg-surface-3/60 hover:text-text-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40"
+            title="Clear focused state"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
     </div>
   );
 };

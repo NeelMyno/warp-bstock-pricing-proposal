@@ -15,6 +15,14 @@ interface LaneTableProps {
   hiddenGroups: Set<string>;
   onToggleGroupVisibility: (groupName: string) => void;
   activeCategory: LaneCategory;
+	focusedState?: string | null;
+	onClearFocusedState?: () => void;
+
+	// Bstock-only: allow App.tsx to own sorting state & order
+	bstockStateAggregates?: StateAggregate[];
+	bstockSortKey?: 'totalShipments' | 'localShipments' | 'warpShare';
+	bstockSortDir?: 'asc' | 'desc';
+	onBstockSortChange?: (key: 'totalShipments' | 'localShipments' | 'warpShare') => void;
 }
 
 // Group lanes by crossdock (destination_1)
@@ -39,66 +47,153 @@ export default function LaneTable({
   hiddenGroups,
   onToggleGroupVisibility,
   activeCategory,
+	focusedState,
+	onClearFocusedState,
+	bstockStateAggregates,
+	bstockSortKey,
+	bstockSortDir,
+	onBstockSortChange,
 }: LaneTableProps) {
 
 
-  // Group lanes by crossdock (destination_1)
+  // Group lanes for the non-Bstock tables.
+  // For seed lanes, group by FC origin (since crossdock is a Bstock concept).
   const groupedLanes = useMemo(() => {
     const groups: GroupedLanes = {};
-    lanes.forEach(lane => {
-      const key = lane.crossdockName || 'Crossdock';
+    if (activeCategory === 'new') return groups;
+
+    lanes.forEach((lane) => {
+      const key = lane.origin;
       if (!groups[key]) {
         groups[key] = [];
       }
       groups[key].push(lane);
     });
     return groups;
-  }, [lanes]);
+  }, [lanes, activeCategory]);
 
-  // Aggregate lanes by final destination state (Bstock view)
-  const stateAggregates: StateAggregate[] = useMemo(
-    () => aggregateByDestinationState(lanes),
-    [lanes]
-  );
+	// Aggregate lanes by final destination state (Bstock view)
+	// If App provides an already-sorted list, prefer it and avoid re-aggregating.
+	const computedStateAggregates: StateAggregate[] = useMemo(() => {
+		if (activeCategory !== 'new') return [];
+		if (bstockStateAggregates) return [];
+		return aggregateByDestinationState(lanes);
+	}, [lanes, activeCategory, bstockStateAggregates]);
+
+	const stateAggregates: StateAggregate[] =
+		activeCategory === 'new'
+			? (bstockStateAggregates ?? computedStateAggregates)
+			: [];
+
+	const thBase =
+		'sticky top-0 bg-surface-2/95 backdrop-blur border-b border-brd-1 text-text-2 font-semibold tracking-wide uppercase text-[11px]';
+	const thButtonBase =
+		'inline-flex items-center gap-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40 rounded-sm disabled:opacity-60 disabled:cursor-default';
+	const sortIndicator = (key: 'totalShipments' | 'localShipments' | 'warpShare') => {
+		if (!bstockSortKey || bstockSortKey !== key) return null;
+		const dir = bstockSortDir === 'asc' ? '▲' : '▼';
+		return (
+			<span aria-hidden className="text-[10px] text-text-2">
+				{dir}
+			</span>
+		);
+	};
+	const ariaSortFor = (key: 'totalShipments' | 'localShipments' | 'warpShare') => {
+		if (!bstockSortKey || bstockSortKey !== key) return 'none' as const;
+		return bstockSortDir === 'asc' ? ('ascending' as const) : ('descending' as const);
+	};
 
   return (
     <div className="bg-surface-1 rounded-lg">
+			  {activeCategory === 'new' && focusedState && (
+				  <div className="px-4 py-2 border-b border-brd-1 bg-surface-2 flex items-center justify-between gap-3">
+					  <div className="text-[11px] text-text-2">
+						  Filtered to <span className="font-semibold text-text-1">{focusedState}</span>
+					  </div>
+					  <button
+						  type="button"
+						  onClick={onClearFocusedState}
+						  className="text-[11px] text-accent hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40 rounded"
+					  >
+						  Clear filter
+					  </button>
+				  </div>
+			  )}
       {/* Control Buttons moved to App header */}
 
-      <div className="overflow-x-auto overflow-y-visible no-scrollbar">
-        <table className="w-full text-sm">
-          <thead className="bg-surface-2 text-text-2">
+	      <div className="overflow-x-auto overflow-y-visible no-scrollbar">
+	        <table className="w-full text-sm">
+	          <thead className="text-text-2">
             <tr>
               <th
-                className={`text-left py-3 px-4 font-semibold tracking-wide uppercase text-[11px] ${
-                  activeCategory === 'new'
-                    ? 'sticky left-0 bg-surface-2 z-[5] border-r border-brd-1 shadow-elev-1'
-                    : ''
-                }`}
+	                className={`text-left py-3 px-4 ${thBase} ${
+	                  activeCategory === 'new'
+	                    ? 'left-0 z-[30] border-r border-brd-1 shadow-elev-1'
+	                    : ''
+	                }`}
                 style={{ minWidth: activeCategory === 'new' ? 80 : 246 }}
               >
                 {activeCategory === 'new' ? 'State' : 'Route'}
               </th>
               {activeCategory === 'new' ? (
                 <>
-                  <th className="text-right py-3 px-4 font-semibold uppercase tracking-wide text-[11px] whitespace-nowrap">
-                    Total shipments
-                  </th>
-                  <th className="text-right py-3 px-4 font-semibold uppercase tracking-wide text-[11px] whitespace-nowrap">
-                    Warp vs LTL
-                  </th>
-                  <th className="text-right py-3 px-4 font-semibold uppercase tracking-wide text-[11px] whitespace-nowrap">
-                    Dest ZIPs
-                  </th>
+	                  <th
+	                    className={`text-right py-3 px-4 whitespace-nowrap z-[10] ${thBase}`}
+	                    aria-sort={ariaSortFor('totalShipments')}
+	                  >
+	                    <button
+	                      type="button"
+	                      disabled={!onBstockSortChange}
+	                      onClick={() => onBstockSortChange?.('totalShipments')}
+	                      className={`${thButtonBase} w-full justify-end`}
+	                      title="Sort by total shipments"
+	                    >
+	                      <span className="tabular-nums">Total shipments</span>
+	                      {sortIndicator('totalShipments')}
+	                    </button>
+	                  </th>
+	                  <th
+	                    className={`text-right py-3 px-4 whitespace-nowrap z-[10] ${thBase}`}
+	                    aria-sort={ariaSortFor('localShipments')}
+	                  >
+	                    <button
+	                      type="button"
+	                      disabled={!onBstockSortChange}
+	                      onClick={() => onBstockSortChange?.('localShipments')}
+	                      className={`${thButtonBase} w-full justify-end`}
+	                      title="Sort by local shipments"
+	                    >
+	                      <span className="tabular-nums">Local ≤100mi</span>
+	                      {sortIndicator('localShipments')}
+	                    </button>
+	                  </th>
+	                  <th
+	                    className={`text-right py-3 px-4 whitespace-nowrap z-[10] ${thBase}`}
+	                    aria-sort={ariaSortFor('warpShare')}
+	                  >
+	                    <button
+	                      type="button"
+	                      disabled={!onBstockSortChange}
+	                      onClick={() => onBstockSortChange?.('warpShare')}
+	                      className={`${thButtonBase} w-full justify-end`}
+	                      title="Sort by Warp share"
+	                    >
+	                      <span>Warp share</span>
+	                      {sortIndicator('warpShare')}
+	                    </button>
+	                  </th>
+	                  <th className={`text-right py-3 px-4 whitespace-nowrap z-[10] ${thBase}`}>
+	                    Dest ZIPs
+	                  </th>
                 </>
               ) : (
                 <>
-                  <th className="text-right py-3 px-4 font-semibold uppercase tracking-wide text-[11px] whitespace-nowrap">Pallets/Day</th>
-                  <th className="text-right py-3 px-4 font-semibold uppercase tracking-wide text-[11px] whitespace-nowrap">Trucks/Day</th>
-                  <th className="text-right py-3 px-4 font-semibold uppercase tracking-wide text-[11px] whitespace-nowrap">Truck Utilization</th>
-                  <th className="text-right py-3 px-4 font-semibold uppercase tracking-wide text-[11px] whitespace-nowrap">Shipping Charge 53</th>
+	                  <th className={`text-right py-3 px-4 whitespace-nowrap z-[10] ${thBase}`}>Pallets/Day</th>
+	                  <th className={`text-right py-3 px-4 whitespace-nowrap z-[10] ${thBase}`}>Trucks/Day</th>
+	                  <th className={`text-right py-3 px-4 whitespace-nowrap z-[10] ${thBase}`}>Truck Utilization</th>
+	                  <th className={`text-right py-3 px-4 whitespace-nowrap z-[10] ${thBase}`}>Shipping Charge 53</th>
 
-                  <th className="text-right py-3 px-4 font-semibold uppercase tracking-wide text-[11px] whitespace-nowrap">Cost/Pallet Breakdown 53</th>
+	                  <th className={`text-right py-3 px-4 whitespace-nowrap z-[10] ${thBase}`}>Cost/Pallet Breakdown 53</th>
                 </>
               )}
             </tr>
@@ -106,11 +201,19 @@ export default function LaneTable({
           <tbody>
             {activeCategory === 'new' && stateAggregates.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-6 px-4 text-center text-xs text-text-2">
+                <td colSpan={5} className="py-6 px-4 text-center text-xs text-text-2">
                   No states match the current filters. Adjust carrier or volume filters to see lanes.
                 </td>
               </tr>
             )}
+
+	            {activeCategory !== 'new' && lanes.length === 0 && (
+	              <tr>
+	                <td colSpan={6} className="py-6 px-4 text-center text-xs text-text-2">
+		                  No lanes available for this category.
+	                </td>
+	              </tr>
+	            )}
 
             {activeCategory === 'new' &&
               stateAggregates.map((agg, idx) => {
@@ -176,6 +279,18 @@ export default function LaneTable({
                     </td>
                     <td className="py-1 px-4">
                       <div className="text-right text-[11px] text-text-2 tabular-nums">
+                        <span className="text-text-1 text-sm tabular-nums">
+                          {formatNumber(agg.localShipments ?? 0, 0)}
+                        </span>
+                        {(agg.unknownDistanceShipments ?? 0) > 0 && (
+                          <span className="ml-1">
+                            +{formatNumber(agg.unknownDistanceShipments ?? 0, 0)} unk
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-1 px-4">
+                      <div className="text-right text-[11px] text-text-2 tabular-nums">
                         <span>
                           Warp {warpShare.toFixed(0)}%
                         </span>
@@ -211,9 +326,7 @@ export default function LaneTable({
                         <div className="flex items-center rounded p-1 flex-1">
                           <div className="flex items-center">
                             <div>
-                              <div className="text-white font-medium">
-                                {origin}
-                              </div>
+                              <div className="text-white font-medium">{origin}</div>
                               <div className="text-xs text-text-2 mt-0.5">
                                 {groupLanes.length} lanes
                               </div>
@@ -232,7 +345,7 @@ export default function LaneTable({
                                   ? 'bg-red-600/30 text-red-400 hover:bg-red-600/40 border-red-500/30'
                                   : 'bg-green-600/30 text-green-400 hover:bg-green-600/40 border-green-500/30'
                               }`}
-                              title={hiddenGroups.has(origin) ? 'Show on map' : 'Hide from map'}
+                              title={hiddenGroups.has(origin) ? 'Show group' : 'Hide group'}
                             >
                               {hiddenGroups.has(origin) ? (
                                 <EyeOff className="w-3.5 h-3.5" />
@@ -268,7 +381,7 @@ export default function LaneTable({
                         >
                           <div className="ml-7 py-0">
                             <span className="text-text-1 text-sm">
-                              Dallas, TX → {lane.crossdockName} → {lane.destName}
+                              {lane.origin} → {lane.destination}
                             </span>
                           </div>
                         </td>

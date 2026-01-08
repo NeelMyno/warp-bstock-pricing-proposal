@@ -11,6 +11,75 @@ export interface ZipCodeCoordinates {
   state?: string;
 }
 
+// Normalize ZIP inputs into a strict 5-digit ZIP.
+// - trims whitespace
+// - if ZIP is 9-digit like 12345-6789, keeps only first 5
+// - removes non-digits
+// - returns a 5-digit ZIP when possible; otherwise returns empty string
+export const normalizeZip = (zip: string): string => {
+  const raw = String(zip ?? '').trim();
+  if (!raw) return '';
+  const digitsOnly = raw.replace(/[^0-9]/g, '');
+  if (digitsOnly.length < 5) return '';
+  return digitsOnly.slice(0, 5);
+};
+
+// Exact-only ZIP coordinate lookup for distance classification.
+// IMPORTANT: This must NOT fall back to state centroids or any other approximation.
+// It only uses local datasets (curated overrides + us-zips) and never calls network APIs.
+export const getZipCodeCoordinatesExact = (
+  zip: string
+): { latitude: number; longitude: number; city?: string; state?: string } | null => {
+  const zip5 = normalizeZip(zip);
+  if (!zip5) return null;
+
+  // 1) Prefer explicit overrides/corrections defined in ZIP_CODE_COORDINATES.
+  const override = ZIP_CODE_COORDINATES[zip5];
+  if (override) {
+    return {
+      latitude: override.latitude,
+      longitude: override.longitude,
+      city: override.city,
+      state: override.state,
+    };
+  }
+
+  // 2) Fall back to the generic US ZIP dataset (still exact ZIP centroids).
+  const generic = (usZips as any)[zip5] as
+    | { latitude: number; longitude: number; city?: string; state?: string }
+    | undefined;
+  if (generic && typeof generic.latitude === 'number' && typeof generic.longitude === 'number') {
+    return {
+      latitude: generic.latitude,
+      longitude: generic.longitude,
+      city: generic.city,
+      state: generic.state,
+    };
+  }
+
+  return null;
+};
+
+// Haversine distance in miles between two lat/lng points.
+export const haversineDistanceMiles = (
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number }
+): number => {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+
+  const R = 3958.7613; // Earth radius in miles
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+
+  const sinDLat = Math.sin(dLat / 2);
+  const sinDLng = Math.sin(dLng / 2);
+  const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLng * sinDLng;
+  const c = 2 * Math.asin(Math.min(1, Math.sqrt(h)));
+  return R * c;
+};
+
 // Known zip codes from the CSV files with their coordinates. These act as
 // overrides/corrections on top of the generic US ZIP dataset.
 export const ZIP_CODE_COORDINATES: Record<string, ZipCodeCoordinates> = {
