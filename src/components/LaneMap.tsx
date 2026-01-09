@@ -53,7 +53,7 @@ const MAP_STYLE = {
 const INITIAL_VIEW_STATE = {
   longitude: -98.5795,
   latitude: 39.8283,
-  zoom: 4,
+  zoom: 3.5,
   pitch: 0,
   bearing: 0
 };
