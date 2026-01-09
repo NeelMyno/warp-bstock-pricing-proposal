@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatLocalPct } from '../utils/format';
 
 interface BstockOverviewProps {
   totalLanes: number;
@@ -8,7 +9,6 @@ interface BstockOverviewProps {
   knownDistanceCount: number;
   unknownDistanceCount: number;
   localCount: number;
-  localSharePct: number; // 0–100
   warpSharePct: number; // 0–100
   ltlSharePct: number; // 0–100
 }
@@ -23,7 +23,6 @@ const BstockOverview: React.FC<BstockOverviewProps> = ({
   knownDistanceCount,
   unknownDistanceCount,
   localCount,
-  localSharePct,
   warpSharePct,
   ltlSharePct,
 }) => {
@@ -36,6 +35,7 @@ const BstockOverview: React.FC<BstockOverviewProps> = ({
 	const distanceTotal = Math.max(0, knownDistanceCount + unknownDistanceCount);
 	const distanceCoveragePct =
 		distanceTotal === 0 ? 0 : Math.round((knownDistanceCount / distanceTotal) * 100);
+		const localPctDisplay = formatLocalPct(localCount, totalLanes, unknownDistanceCount);
 
 	return (
 	  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -67,10 +67,8 @@ const BstockOverview: React.FC<BstockOverviewProps> = ({
 	      title={`Local is straight-line distance from Origin ZIP to Destination ZIP. Percent is among lanes with known distance (unknown: ${fmtInt(unknownDistanceCount)}).`}
 	    >
 	      <div className={labelClass}>Local (≤100mi)</div>
-	      <div className={valueClass}>{localSharePct}%</div>
-	      <div className={subClass}>
-	        {fmtInt(localCount)} / {fmtInt(knownDistanceCount)} known
-	      </div>
+		      <div className={valueClass}>{localPctDisplay}</div>
+		      <div className={subClass}>Local: {fmtInt(localCount)} · Unknown: {fmtInt(unknownDistanceCount)}</div>
 	    </div>
 	  </div>
 	);

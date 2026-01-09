@@ -17,6 +17,8 @@ import seedData from './data/seed.json';
 
 type CarrierFilter = 'all' | 'warp' | 'ltl';
 type DistanceFilter = 'all' | 'local' | 'nonLocal';
+type BstockSortKey = 'totalShipments' | 'localShipments' | 'warpShare';
+type SortDir = 'asc' | 'desc';
 
 
 
@@ -51,6 +53,10 @@ function App() {
 	  const [distanceFilter, setDistanceFilter] = useState<DistanceFilter>('all');
 	  const [focusedState, setFocusedState] = useState<string | null>(null);
 			const [categoryNotice, setCategoryNotice] = useState<string | null>(null);
+
+		  // Bstock sorting (owned by App)
+		  const [bstockSortKey, setBstockSortKey] = useState<BstockSortKey>('totalShipments');
+		  const [bstockSortDir, setBstockSortDir] = useState<SortDir>('desc');
 
 	  // Global UI state
 	  const [showOnlySelected, setShowOnlySelected] = useState(false);
@@ -207,6 +213,20 @@ function App() {
 			  setShowOnlySelected(false);
 			};
 
+				const handleBstockSortChange = useCallback(
+					(key: BstockSortKey) => {
+						setBstockSortDir((prevDir) => {
+							// Click same key -> toggle direction; new key -> default to descending
+							if (key === bstockSortKey) {
+								return prevDir === 'asc' ? 'desc' : 'asc';
+							}
+							return 'desc';
+						});
+						setBstockSortKey(key);
+					},
+					[bstockSortKey]
+				);
+
 	  const handleCategoryChange = (next: LaneCategory) => {
 			  setCategoryNotice(null);
 	    setAppState((prev) => ({
@@ -233,6 +253,8 @@ function App() {
 	    setCarrierFilter('all');
 	    setDistanceFilter('all');
 	    setMinPiecesFilter(0);
+		    setBstockSortKey('totalShipments');
+		    setBstockSortDir('desc');
 		    setMapResetSignal((n) => n + 1);
 	  };
 
@@ -395,11 +417,39 @@ function App() {
 
 	const filteredLanes = distanceFilteredLanes;
 
-		// Empty-state guard: if filters result in 0 lanes OR 0 destination states.
-		const filteredStateCount = useMemo(() => {
-		  if (appState.activeCategory !== 'new') return 0;
-		  return aggregateByDestinationState(filteredLanes).length;
-		}, [appState.activeCategory, filteredLanes]);
+			// Bstock: aggregate *after all filters*; App owns sorting and passes rows in the desired order.
+			const bstockAggregates: StateAggregate[] = useMemo(() => {
+			  if (appState.activeCategory !== 'new') return [];
+			  return aggregateByDestinationState(filteredLanes);
+			}, [appState.activeCategory, filteredLanes]);
+
+			const sortedBstockAggregates: StateAggregate[] = useMemo(() => {
+			  if (appState.activeCategory !== 'new') return [];
+			  const getSortValue = (agg: StateAggregate): number => {
+			    switch (bstockSortKey) {
+			      case 'localShipments':
+			        return agg.localShipments;
+			      case 'warpShare':
+			        return agg.warpShare;
+			      case 'totalShipments':
+			      default:
+			        return agg.totalShipments;
+			    }
+			  };
+
+			  return [...bstockAggregates].sort((a, b) => {
+			    const av = getSortValue(a);
+			    const bv = getSortValue(b);
+			    if (av !== bv) {
+			      return bstockSortDir === 'asc' ? av - bv : bv - av;
+			    }
+			    // Secondary: state alphabetical for deterministic ordering.
+			    return a.state.localeCompare(b.state);
+			  });
+			}, [appState.activeCategory, bstockAggregates, bstockSortKey, bstockSortDir]);
+
+			// Empty-state guard: if filters result in 0 lanes OR 0 destination states.
+			const filteredStateCount = appState.activeCategory !== 'new' ? 0 : bstockAggregates.length;
 
 		// Bstock overview KPI block (category + carrier only; before distance filter)
 		const bstockOverviewMetrics = useMemo(() => {
@@ -426,8 +476,6 @@ function App() {
 		  });
 
 			  const knownDistanceCount = Math.max(0, totalLanes - unknownDistanceCount);
-			  const localSharePct =
-			    knownDistanceCount === 0 ? 0 : Math.round((localCount / knownDistanceCount) * 100);
 			  const warpSharePct = totalLanes === 0 ? 0 : Math.round((warpCount / totalLanes) * 100);
 			  const ltlSharePct = totalLanes === 0 ? 0 : Math.round((ltlCount / totalLanes) * 100);
 
@@ -439,7 +487,6 @@ function App() {
 			    knownDistanceCount,
 			    unknownDistanceCount,
 			    localCount,
-			    localSharePct,
 			    warpSharePct,
 			    ltlSharePct,
 			  };
@@ -642,9 +689,11 @@ function App() {
                 <h1 className="text-lg font-bold text-white">
                   {getCategoryDisplayName(appState.activeCategory)} Lanes
                 </h1>
-                <p className="text-xs text-text-2">
-	                  {filteredLanes.length} lanes
-                </p>
+				    {!(appState.activeCategory === 'new' && bstockOverviewMetrics) && (
+				      <p className="text-xs text-text-2">
+					          {filteredLanes.length} lanes
+				      </p>
+				    )}
               </div>
             </div>
 
@@ -708,12 +757,12 @@ function App() {
 								</button>
 							);
 						})}
-						{distanceCoverage && distanceCoverage.total > 0 && (
-							<span className="ml-2 text-[10px] text-text-2">
-								Distance coverage: {distanceCoverage.coveragePct.toFixed(0)}% known
-								{distanceFilter !== 'all' && distanceCoverage.unknown > 0 && (
-									<span className="text-amber-200"> - {distanceCoverage.unknown} unknown excluded</span>
-								)}
+						{distanceCoverage &&
+							distanceCoverage.total > 0 &&
+							distanceFilter !== 'all' &&
+							distanceCoverage.unknown > 0 && (
+							<span className="ml-2 text-[10px] text-amber-200">
+								Unknown distance: {distanceCoverage.unknown} lanes (excluded)
 							</span>
 						)}
 					</div>
@@ -773,6 +822,10 @@ function App() {
 						      activeCategory={appState.activeCategory}
 						      focusedState={focusedState}
 						      onClearFocusedState={clearFocusedState}
+						    bstockStateAggregates={appState.activeCategory === 'new' ? sortedBstockAggregates : undefined}
+						    bstockSortKey={bstockSortKey}
+						    bstockSortDir={bstockSortDir}
+						    onBstockSortChange={handleBstockSortChange}
 						    />
 						  )}
           </div>

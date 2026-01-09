@@ -40,3 +40,18 @@ export function formatTime(iso?: string): string {
   }
 }
 
+// Local % should be computed among lanes with known distance.
+// Known distance = total - unknown. If known is 0, return an em dash.
+export function formatLocalPct(localCount: number, totalCount: number, unknownCount: number): string {
+  const local = Number.isFinite(localCount) ? localCount : 0;
+  const total = Number.isFinite(totalCount) ? totalCount : 0;
+  const unknown = Number.isFinite(unknownCount) ? unknownCount : 0;
+  const known = total - unknown;
+  if (known <= 0) return '—';
+
+  const rawPct = Math.round((local / known) * 100);
+  if (!Number.isFinite(rawPct)) return '—';
+  const pct = Math.max(0, Math.min(100, rawPct));
+  return `${pct}%`;
+}
+

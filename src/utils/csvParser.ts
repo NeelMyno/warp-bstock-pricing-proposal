@@ -85,6 +85,10 @@ export interface StateAggregate {
   totalShipments: number;
   localShipments: number;
   unknownDistanceShipments: number;
+  warpShipments: number;
+  ltlShipments: number;
+  // 0..1 fraction of totalShipments
+  warpShare: number;
   totalPieces: number;
   localPieces: number;
   lanes: Lane[];
@@ -97,6 +101,8 @@ export const aggregateByDestinationState = (lanes: Lane[]): StateAggregate[] => 
       totalShipments: number;
       localShipments: number;
       unknownDistanceShipments: number;
+      warpShipments: number;
+      ltlShipments: number;
       totalPieces: number;
       localPieces: number;
       lanes: Lane[];
@@ -111,12 +117,18 @@ export const aggregateByDestinationState = (lanes: Lane[]): StateAggregate[] => 
         totalShipments: 0,
         localShipments: 0,
         unknownDistanceShipments: 0,
+        warpShipments: 0,
+        ltlShipments: 0,
         totalPieces: 0,
         localPieces: 0,
         lanes: [],
       };
     entry.totalShipments += 1;
     entry.totalPieces += lane.totalPieces || 0;
+
+    const carrierType = (lane.carrierType ?? '').toLowerCase();
+    if (carrierType === 'warp') entry.warpShipments += 1;
+    else if (carrierType === 'ltl') entry.ltlShipments += 1;
 
     if (lane.isLocalDelivery100 === true) {
       entry.localShipments += 1;
@@ -130,15 +142,23 @@ export const aggregateByDestinationState = (lanes: Lane[]): StateAggregate[] => 
   });
 
   return Array.from(byState.entries())
-    .map(([state, { totalShipments, localShipments, unknownDistanceShipments, totalPieces, localPieces, lanes }]) => ({
+    .map(
+      ([
+        state,
+        { totalShipments, localShipments, unknownDistanceShipments, warpShipments, ltlShipments, totalPieces, localPieces, lanes },
+      ]) => ({
       state,
       totalShipments,
       localShipments,
       unknownDistanceShipments,
+      warpShipments,
+      ltlShipments,
+      warpShare: totalShipments > 0 ? warpShipments / totalShipments : 0,
       totalPieces,
       localPieces,
       lanes,
-    }))
+      })
+    )
     .sort((a, b) => {
       // Sort primarily by total shipments (descending), then by state code (ascending)
       if (b.totalShipments !== a.totalShipments) {

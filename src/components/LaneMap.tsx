@@ -7,6 +7,7 @@ import type { Layer } from '@deck.gl/core';
 import { Lane, LaneCategory } from '../types';
 import { getZipCodeCoordinates, getStateCoordinates } from '../utils/zipCodeService';
 import { aggregateByDestinationState, StateAggregate } from '../utils/csvParser';
+import { formatLocalPct } from '../utils/format';
 
 interface LaneMapProps {
   lanes: Lane[];
@@ -625,6 +626,9 @@ export const LaneMap: React.FC<LaneMapProps> = ({
     highlightState
   );
 
+	// When something is highlighted, keep context visible (~15% opacity for non-highlighted).
+	const DIM_ALPHA = 38; // ~15% of 255
+
   // Helper to dim carrier colors toward the background while preserving hue
   const dimRGB = (c: [number, number, number], f = 0.25): [number, number, number] => [
     Math.round(c[0] * f), Math.round(c[1] * f), Math.round(c[2] * f)
@@ -665,9 +669,9 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       getTargetPosition: (d: any) => d.targetPosition,
       getSourceColor: (d: any) => {
         const base = d.color as [number, number, number];
-        const alphaStrong = 230;
+	        const alphaStrong = 255;
         const alphaMedium = 150;
-        const alphaDim = 3; // ~1% opacity when another lane/state is highlighted
+	        const alphaDim = DIM_ALPHA;
 
         if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
         if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
@@ -677,9 +681,9 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       },
       getTargetColor: (d: any) => {
         const base = d.color as [number, number, number];
-        const alphaStrong = 230;
+	        const alphaStrong = 255;
         const alphaMedium = 150;
-        const alphaDim = 3; // ~1% opacity when another lane/state is highlighted
+	        const alphaDim = DIM_ALPHA;
 
         if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
         if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
@@ -710,9 +714,9 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       getTargetPosition: (d: any) => d.targetPosition,
       getSourceColor: (d: any) => {
         const base = d.color as [number, number, number];
-        const alphaStrong = 230;
+	        const alphaStrong = 255;
         const alphaMedium = 150;
-        const alphaDim = 3; // ~1% opacity when another lane/state is highlighted
+	        const alphaDim = DIM_ALPHA;
 
         if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
         if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
@@ -722,9 +726,9 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       },
       getTargetColor: (d: any) => {
         const base = d.color as [number, number, number];
-        const alphaStrong = 230;
+	        const alphaStrong = 255;
         const alphaMedium = 150;
-        const alphaDim = 3; // ~1% opacity when another lane/state is highlighted
+	        const alphaDim = DIM_ALPHA;
 
         if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
         if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
@@ -759,7 +763,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
 	        const base = LOCAL_RGB;
 	        const alphaStrong = 255;
 	        const alphaNormal = 220;
-	        const alphaDim = 60;
+		        const alphaDim = DIM_ALPHA;
 	        if (d.selected || d.hovered) return [ACCENT[0], ACCENT[1], ACCENT[2], alphaStrong];
 	        if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
 	        return [base[0], base[1], base[2], alphaNormal];
@@ -768,7 +772,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
 	        const base = LOCAL_RGB;
 	        const alphaStrong = 255;
 	        const alphaNormal = 220;
-	        const alphaDim = 60;
+		        const alphaDim = DIM_ALPHA;
 	        if (d.selected || d.hovered) return [ACCENT[0], ACCENT[1], ACCENT[2], alphaStrong];
 	        if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
 	        return [base[0], base[1], base[2], alphaNormal];
@@ -804,9 +808,9 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       getPath: (d: any) => d.path,
       getColor: (d: any) => {
         const base = d.color as [number, number, number];
-        const alphaStrong = 230;
+	        const alphaStrong = 255;
         const alphaMedium = 150;
-        const alphaDim = 3; // ~1% opacity when another lane/state is highlighted
+	        const alphaDim = DIM_ALPHA;
 
         if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
         if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
@@ -846,9 +850,9 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       getPath: (d: any) => d.path,
       getColor: (d: any) => {
         const base = d.color as [number, number, number];
-        const alphaStrong = 230;
+	        const alphaStrong = 255;
         const alphaMedium = 150;
-        const alphaDim = 3; // ~1% opacity when another lane/state is highlighted
+	        const alphaDim = DIM_ALPHA;
 
         if (d.selected || d.hovered) return [base[0], base[1], base[2], alphaStrong];
         if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
@@ -891,7 +895,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
 	        const base = LOCAL_RGB;
 	        const alphaStrong = 255;
 	        const alphaNormal = 220;
-	        const alphaDim = 60;
+		        const alphaDim = DIM_ALPHA;
 	        if (d.selected || d.hovered) return [ACCENT[0], ACCENT[1], ACCENT[2], alphaStrong];
 	        if (anyMapHover) return [base[0], base[1], base[2], alphaDim];
 	        return [base[0], base[1], base[2], alphaNormal];
@@ -945,9 +949,13 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       getPosition: (d: any) => d.position,
       getFillColor: (d: any) => {
         const isHovered = d.lane && (d.lane.id === hoveredLane?.id || d.lane.id === mapHoveredLaneId);
-        if (isHovered) return ACCENT;
-        if (anyMapHover) return dimRGB(d.color);
-        return d.color;
+	        const raw = d.color as any;
+	        const c: [number, number, number] = Array.isArray(raw)
+	          ? [raw[0] ?? 204, raw[1] ?? 204, raw[2] ?? 204]
+	          : [204, 204, 204];
+	        if (isHovered) return [ACCENT[0], ACCENT[1], ACCENT[2], 255];
+	        if (anyMapHover) return [c[0], c[1], c[2], DIM_ALPHA];
+	        return raw;
       },
       getRadius: (d: any) => {
         const base = d.radius;
@@ -1059,8 +1067,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
                 : aggregate?.lanes.length ?? 1;
             const localShipments = aggregate?.localShipments ?? 0;
             const unknownShipments = aggregate?.unknownDistanceShipments ?? 0;
-            const knownShipments = totalShipments - unknownShipments;
-            const localPct = knownShipments > 0 ? Math.round((localShipments / knownShipments) * 100) : 0;
+	            const localPctDisplay = formatLocalPct(localShipments, totalShipments, unknownShipments);
 
             const destinationState = stateKey;
             const formattedShipments = Number.isFinite(totalShipments)
@@ -1081,7 +1088,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
               </div>`,
               `<div class="flex items-baseline justify-between gap-3">
                 <span class="text-text-2">Local (≤100mi)</span>
-                <span class="font-semibold text-text-1 tabular-nums">${formattedLocal} (${localPct}%)</span>
+	                <span class="font-semibold text-text-1 tabular-nums">${formattedLocal} (${localPctDisplay})</span>
               </div>`
             ];
             if (unknownShipments > 0) {

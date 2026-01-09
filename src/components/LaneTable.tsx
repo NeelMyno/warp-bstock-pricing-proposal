@@ -72,18 +72,12 @@ export default function LaneTable({
     return groups;
   }, [lanes, activeCategory]);
 
-	// Aggregate lanes by final destination state (Bstock view)
-	// If App provides an already-sorted list, prefer it and avoid re-aggregating.
-	const computedStateAggregates: StateAggregate[] = useMemo(() => {
-		if (activeCategory !== 'new') return [];
-		if (bstockStateAggregates) return [];
-		return aggregateByDestinationState(lanes);
-	}, [lanes, activeCategory, bstockStateAggregates]);
-
-	const stateAggregates: StateAggregate[] =
-		activeCategory === 'new'
-			? (bstockStateAggregates ?? computedStateAggregates)
-			: [];
+		// Aggregate lanes by final destination state (Bstock view)
+		// If App provides an already-sorted list, prefer it and avoid re-aggregating.
+		const stateAggregates: StateAggregate[] = useMemo(() => {
+			if (activeCategory !== 'new') return [];
+			return bstockStateAggregates ?? aggregateByDestinationState(lanes);
+		}, [lanes, activeCategory, bstockStateAggregates]);
 
 	const thBase =
 		'sticky top-0 bg-surface-2/95 backdrop-blur border-b border-brd-1 text-text-2 font-semibold tracking-wide uppercase text-[11px]';
@@ -148,7 +142,7 @@ export default function LaneTable({
 	                      className={`${thButtonBase} w-full justify-end`}
 	                      title="Sort by total shipments"
 	                    >
-	                      <span className="tabular-nums">Total shipments</span>
+							  <span className="tabular-nums">TOTAL SHIPMENTS</span>
 	                      {sortIndicator('totalShipments')}
 	                    </button>
 	                  </th>
@@ -163,7 +157,7 @@ export default function LaneTable({
 	                      className={`${thButtonBase} w-full justify-end`}
 	                      title="Sort by local shipments"
 	                    >
-	                      <span className="tabular-nums">Local ≤100mi</span>
+							  <span className="tabular-nums">LOCAL ≤100MI</span>
 	                      {sortIndicator('localShipments')}
 	                    </button>
 	                  </th>
@@ -178,13 +172,13 @@ export default function LaneTable({
 	                      className={`${thButtonBase} w-full justify-end`}
 	                      title="Sort by Warp share"
 	                    >
-	                      <span>Warp share</span>
+							  <span>WARP SHARE</span>
 	                      {sortIndicator('warpShare')}
 	                    </button>
 	                  </th>
-	                  <th className={`text-right py-3 px-4 whitespace-nowrap z-[10] ${thBase}`}>
-	                    Dest ZIPs
-	                  </th>
+						<th className={`text-right py-3 px-4 whitespace-nowrap z-[10] ${thBase}`}>
+						  DEST ZIPS
+						</th>
                 </>
               ) : (
                 <>
@@ -220,25 +214,19 @@ export default function LaneTable({
                 const representativeLane = agg.lanes[0];
                 if (!representativeLane) return null;
 
-                // Per-state carrier mix and destination ZIP counts
-                let warpShipments = 0;
-                let ltlShipments = 0;
-                const destZips = new Set<string>();
+	                // Destination ZIP counts (carrier mix is precomputed in aggregates)
+	                const destZips = new Set<string>();
+	                agg.lanes.forEach((lane) => {
+	                  if (lane.destZip) {
+	                    destZips.add(String(lane.destZip));
+	                  }
+	                });
 
-                agg.lanes.forEach((lane) => {
-                  const type = (lane.carrierType ?? '').toLowerCase();
-                  if (type === 'warp') warpShipments += 1;
-                  else if (type === 'ltl') ltlShipments += 1;
-
-                  if (lane.destZip) {
-                    destZips.add(String(lane.destZip));
-                  }
-                });
-
-                const totalShipments = typeof agg.totalShipments === 'number' ? agg.totalShipments : agg.lanes.length;
-                const warpShare = totalShipments > 0 ? (warpShipments / totalShipments) * 100 : 0;
-                const ltlShare = totalShipments > 0 ? (ltlShipments / totalShipments) * 100 : 0;
-                const zipCount = destZips.size;
+	                const totalShipments = typeof agg.totalShipments === 'number' ? agg.totalShipments : agg.lanes.length;
+	                const ltlShipments = agg.ltlShipments ?? 0;
+	                const warpSharePct = typeof agg.warpShare === 'number' ? agg.warpShare * 100 : 0;
+	                const ltlSharePct = totalShipments > 0 ? (ltlShipments / totalShipments) * 100 : 0;
+	                const zipCount = destZips.size;
 
                 const isSelected = selectedLane?.id === representativeLane.id;
                 const stickyBg = isSelected
@@ -292,11 +280,11 @@ export default function LaneTable({
                     <td className="py-1 px-4">
                       <div className="text-right text-[11px] text-text-2 tabular-nums">
                         <span>
-                          Warp {warpShare.toFixed(0)}%
+	                          Warp {warpSharePct.toFixed(0)}%
                         </span>
                         <span className="mx-1">{' | '}</span>
                         <span>
-                          LTL {ltlShare.toFixed(0)}%
+	                          LTL {ltlSharePct.toFixed(0)}%
                         </span>
                       </div>
                     </td>
